@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Vị Trí Hiện Tại</title>
+</head>
+<body>
+    <h1>🧪 Test Vị Trí Hiện Tại</h1>
+    <button onclick="testCurrentPosition()">Test Current Position</button>
+    <div id="results"></div>
+
+    <script>
+        // Mock data for testing
+        const testCvInfo = {
+            personal: {name: "PHẠM YẾN LINH"},
+            contact: {email: "test@example.com"},
+            education: [],
+            experience: [
+                {
+                    timeRange: "01/2023 - nay",
+                    position: "Marketing Manager",
+                    company: "ABC Company", 
+                    description: "Marketing Manager - ABC Company",
+                    isCurrent: true,
+                    raw: "01/2023 - nay: Marketing Manager - ABC Company"
+                },
+                {
+                    timeRange: "06/2021 - 12/2022",
+                    position: "Marketing Executive", 
+                    company: "XYZ Corp",
+                    description: "Marketing Executive - XYZ Corp", 
+                    isCurrent: false,
+                    raw: "06/2021 - 12/2022: Marketing Executive - XYZ Corp"
+                }
+            ]
+        };
+
+        function guessCurrentPosition(cvInfo) {
+            console.log('=== DETERMINING CURRENT POSITION ===');
+            console.log('Raw experience data:', cvInfo.experience);
+            
+            if (!Array.isArray(cvInfo.experience) || cvInfo.experience.length === 0) {
+                console.log('❌ No experience data available');
+                return '';
+            }
+            
+            console.log(`Total experience entries: ${cvInfo.experience.length}`);
+            
+            // Debug từng entry
+            cvInfo.experience.forEach((exp, idx) => {
+                console.log(`Experience ${idx + 1}:`, {
+                    type: typeof exp,
+                    timeRange: exp?.timeRange,
+                    position: exp?.position,
+                    company: exp?.company,
+                    isCurrent: exp?.isCurrent,
+                    raw: exp?.raw || exp
+                });
+            });
+            
+            // Sắp xếp experience theo thời gian để tìm công việc cuối cùng
+            let structuredExperiences = cvInfo.experience.filter(exp => 
+                typeof exp === 'object' && exp !== null && exp.timeRange
+            );
+            
+            console.log(`Filtered structured experiences: ${structuredExperiences.length}`);
+            console.log('Structured experience details:', structuredExperiences);
+            
+            if (structuredExperiences.length > 0) {
+                // Sắp xếp theo thời gian bắt đầu (mới nhất trước)
+                structuredExperiences.sort((a, b) => {
+                    const getStartTime = (exp) => {
+                        const match = exp.timeRange.match(/(\d{1,2})\/(\d{4})/);
+                        if (match) {
+                            const year = parseInt(match[2]);
+                            const month = parseInt(match[1]);
+                            const time = year * 12 + month;
+                            console.log(`Time calculation for "${exp.timeRange}": ${year}/${month} = ${time}`);
+                            return time;
+                        } else {
+                            console.log(`⚠️ Could not parse time from: "${exp.timeRange}"`);
+                            return 0;
+                        }
+                    };
+                    const timeA = getStartTime(a);
+                    const timeB = getStartTime(b);
+                    console.log(`Comparing ${a.timeRange} (${timeA}) vs ${b.timeRange} (${timeB})`);
+                    return timeB - timeA; // Newer first
+                });
+                
+                console.log('✓ Experiences sorted by time:');
+                structuredExperiences.forEach((exp, idx) => {
+                    console.log(`  ${idx + 1}. ${exp.timeRange} - ${exp.position} (isCurrent: ${exp.isCurrent})`);
+                });
+                
+                // Kiểm tra công việc mới nhất có phải là current không
+                const latestJob = structuredExperiences[0];
+                console.log(`Latest job analysis:`, {
+                    timeRange: latestJob?.timeRange,
+                    position: latestJob?.position,
+                    isCurrent: latestJob?.isCurrent,
+                    currentCheck: latestJob && latestJob.isCurrent === true
+                });
+                
+                let currentPosition = '';
+                
+                if (latestJob && latestJob.isCurrent === true) {
+                    // Ưu tiên position field, fallback to parsing description
+                    currentPosition = latestJob.position || 
+                                    (latestJob.description ? latestJob.description.split('-')[0].trim() : '');
+                    
+                    console.log(`✅ Latest job is CURRENT: ${latestJob.timeRange}`);
+                    console.log(`   - Position field: "${latestJob.position}"`);
+                    console.log(`   - Description: "${latestJob.description}"`);
+                    console.log(`   - Final current position: "${currentPosition}"`);
+                } else {
+                    console.log(`❌ Latest job (${latestJob?.timeRange}) is NOT current, leaving position EMPTY`);
+                    console.log(`   - isCurrent value: ${latestJob?.isCurrent}`);
+                    console.log(`   - isCurrent type: ${typeof latestJob?.isCurrent}`);
+                    console.log(`   - Latest job details:`, latestJob);
+                    
+                    // ADDITIONAL CHECK: Maybe isCurrent is string "true" or similar
+                    if (latestJob && (String(latestJob.isCurrent).toLowerCase() === 'true' || 
+                                     /nay|hiện tại/i.test(latestJob.timeRange))) {
+                        console.log(`🔄 FALLBACK: Detecting current job from timeRange or string isCurrent`);
+                        currentPosition = latestJob.position || 
+                                        (latestJob.description ? latestJob.description.split('-')[0].trim() : '');
+                        console.log(`   - FALLBACK current position: "${currentPosition}"`);
+                    }
+                }
+                
+                return currentPosition;
+            } else {
+                console.log('❌ No structured experiences found');
+                return '';
+            }
+        }
+
+        function testCurrentPosition() {
+            console.log('🧪 Testing Current Position Logic...');
+            const result = guessCurrentPosition(testCvInfo);
+            
+            document.getElementById('results').innerHTML = `
+                <h2>Test Results:</h2>
+                <p><strong>Current Position:</strong> "${result}"</p>
+                <p><strong>Expected:</strong> "Marketing Manager"</p>
+                <p><strong>Status:</strong> ${result === 'Marketing Manager' ? '✅ PASS' : '❌ FAIL'}</p>
+                
+                <h3>Test Data:</h3>
+                <pre>${JSON.stringify(testCvInfo.experience, null, 2)}</pre>
+                
+                <p><em>Check console for detailed logs</em></p>
+            `;
+        }
+    </script>
+</body>
+</html>

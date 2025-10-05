@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DOCX Checkbox Debug Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+</head>
+<body>
+    <h2>DOCX Checkbox Debug Tool</h2>
+    <p>Công cụ này sẽ giúp hiểu tại sao checkbox symbols trong Word không xuất hiện khi extract text</p>
+    
+    <input type="file" id="fileInput" accept=".docx">
+    <div id="results" style="font-family: monospace; white-space: pre-wrap; margin-top: 20px;"></div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const results = document.getElementById('results');
+            results.innerHTML = 'Analyzing...\n';
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                
+                results.innerHTML += '=== DOCX CHECKBOX ANALYSIS ===\n';
+                results.innerHTML += `File: ${file.name}\n`;
+                results.innerHTML += `Size: ${file.size} bytes\n\n`;
+                
+                // 1. Mammoth text extraction
+                results.innerHTML += '1. MAMMOTH TEXT EXTRACTION:\n';
+                const textResult = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
+                results.innerHTML += `   Text length: ${textResult.value.length}\n`;
+                
+                const textLines = textResult.value.split('\n').map(line => line.trim()).filter(line => line);
+                const genderLines = textLines.filter(line => 
+                    line.toLowerCase().includes('giới') || 
+                    line.includes('Nam') || 
+                    line.includes('Nữ')
+                );
+                
+                results.innerHTML += `   Gender-related lines found: ${genderLines.length}\n`;
+                genderLines.forEach((line, index) => {
+                    results.innerHTML += `   Line ${index + 1}: "${line}"\n`;
+                });
+                
+                // 2. Check for Unicode symbols in text
+                const hasSymbols = /[\u2610-\u2611\u2713\u2714☐☑✓✔]/.test(textResult.value);
+                results.innerHTML += `   Contains Unicode checkbox symbols: ${hasSymbols}\n\n`;
+                
+                // 3. XML Analysis
+                results.innerHTML += '2. XML STRUCTURE ANALYSIS:\n';
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                const documentXml = await zip.file("word/document.xml").async("text");
+                
+                // Check storage methods
+                const storageTypes = {
+                    'Form Fields': documentXml.includes('<w:ffData') || documentXml.includes('w:checkBox'),
+                    'Symbols (w:sym)': documentXml.includes('<w:sym'),
+                    'Content Controls': documentXml.includes('<w:sdt'),
+                    'Wingdings Font': documentXml.includes('Wingdings'),
+                    'Symbol Font': documentXml.includes('"Symbol"')
+                };
+                
+                results.innerHTML += '   Storage methods detected:\n';
+                Object.entries(storageTypes).forEach(([method, found]) => {
+                    results.innerHTML += `   - ${method}: ${found ? 'YES' : 'NO'}\n`;
+                });
+                
+                // 4. Symbol Elements Analysis
+                const symbolElements = documentXml.match(/<w:sym[^>]+>/g);
+                if (symbolElements) {
+                    results.innerHTML += `\n3. SYMBOL ELEMENTS (${symbolElements.length} found):\n`;
+                    
+                    symbolElements.forEach((element, index) => {
+                        const fontMatch = element.match(/w:font="([^"]*)"/);
+                        const charMatch = element.match(/w:char="([^"]*)"/);
+                        
+                        if (fontMatch && charMatch) {
+                            const font = fontMatch[1];
+                            const charCode = charMatch[1];
+                            
+                            try {
+                                const unicode = String.fromCharCode(parseInt(charCode, 16));
+                                results.innerHTML += `   Symbol ${index + 1}: font="${font}", char="${charCode}", displays: "${unicode}"\n`;
+                                
+                                // Check common checkbox codes
+                                const checkboxCodes = ['F071', 'F072', 'F0A3', '2610', '2611'];
+                                if (checkboxCodes.includes(charCode.toUpperCase())) {
+                                    results.innerHTML += `   ★ This is a checkbox symbol!\n`;
+                                }
+                            } catch (e) {
+                                results.innerHTML += `   Symbol ${index + 1}: font="${font}", char="${charCode}" (decode error)\n`;
+                            }
+                        }
+                    });
+                } else {
+                    results.innerHTML += '\n3. SYMBOL ELEMENTS: None found\n';
+                }
+                
+                // 5. XML around gender section
+                const genderXmlMatch = documentXml.match(/.{0,800}[Gg]iới.*?tính.{0,800}/s);
+                if (genderXmlMatch) {
+                    results.innerHTML += '\n4. XML AROUND GENDER SECTION:\n';
+                    results.innerHTML += genderXmlMatch[0] + '\n';
+                }
+                
+                // 6. Summary and explanation
+                results.innerHTML += '\n=== SUMMARY ===\n';
+                results.innerHTML += 'WHY CHECKBOXES DISAPPEAR:\n';
+                results.innerHTML += '• Word stores checkboxes as form controls/symbols, not text\n';
+                results.innerHTML += '• Mammoth.js extracts only text content, ignoring form elements\n';
+                results.innerHTML += '• Symbol fonts (Wingdings) become invisible in text extraction\n';
+                results.innerHTML += '• Need special parsing to decode w:sym elements or form fields\n\n';
+                
+                if (symbolElements && symbolElements.length > 0) {
+                    results.innerHTML += 'SOLUTION FOR YOUR FILE:\n';
+                    results.innerHTML += '• Your file uses w:sym elements for checkboxes\n';
+                    results.innerHTML += '• Need to parse XML and decode character codes\n';
+                    results.innerHTML += '• Look for w:char codes like F071, F072 (Wingdings checkboxes)\n';
+                } else if (storageTypes['Form Fields']) {
+                    results.innerHTML += 'SOLUTION FOR YOUR FILE:\n';
+                    results.innerHTML += '• Your file uses form fields for checkboxes\n';
+                    results.innerHTML += '• Need to parse w:checkBox elements in XML\n';
+                } else {
+                    results.innerHTML += 'YOUR FILE:\n';
+                    results.innerHTML += '• No standard checkbox methods detected\n';
+                    results.innerHTML += '• May use custom formatting or plain text\n';
+                }
+                
+            } catch (error) {
+                results.innerHTML += 'Error: ' + error.message + '\n';
+            }
+        });
+    </script>
+</body>
+</html>

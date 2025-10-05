@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document Reader - Trích xuất thông tin từ DOCX/PDF</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Removed unused libraries: docx4js, docx-preview -->
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border: 3px dashed #4facfe;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #00f2fe;
+            background: #e3f2fd;
+        }
+
+        .upload-section.dragover {
+            border-color: #ff6b6b;
+            background: #ffe0e0;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.3);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(79, 172, 254, 0.4);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin-top: 15px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4facfe, #00f2fe);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .result-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .result-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .result-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #4facfe;
+            padding-bottom: 10px;
+        }
+
+        .info-item {
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #4facfe;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .raw-content {
+            grid-column: 1 / -1;
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .raw-content h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .raw-content pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+            color: #555;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4facfe;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #ffcdd2;
+        }
+
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #c8e6c9;
+        }
+
+        @media (max-width: 768px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+
+        /* Table styles */
+        #resultsTable tbody td {
+            padding: 6px;
+            border: 1px solid #ddd;
+            font-size: 0.75em;
+            line-height: 1.3;
+            vertical-align: top;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+        
+        #resultsTable tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        #resultsTable tbody tr:hover {
+            background-color: #f0f8ff;
+        }
+        
+        .delete-btn {
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7em;
+        }
+        
+        .delete-btn:hover {
+            background-color: #ff3742;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 CV Document Reader</h1>
+            <p>Trích xuất thông tin từ file DOCX và PDF một cách thông minh</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">📂</div>
+                <h3 style="margin: 20px 0;">Kéo thả file hoặc click để chọn</h3>
+                <p>Hỗ trợ: DOCX, PDF (tối đa 10MB)</p>
+                <input type="file" id="fileInput" class="file-input" accept=".docx,.pdf" />
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Chọn File</button>
+                <div class="file-info" id="fileInfo"></div>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Đang xử lý file...</p>
+            </div>
+
+            <div class="results-section" id="resultsSection" style="display:none;">
+                <h2>🎯 Thông tin được trích xuất</h2>
+                <button id="saveBtn" class="upload-btn" style="margin-bottom:20px;">Lưu vào danh sách</button>
+                <div class="table-wrapper" style="overflow-x:auto; max-height:400px; border:1px solid #ddd; border-radius:8px;">
+                    <table id="resultsTable" style="width:100%;border-collapse:collapse; font-size:0.85em;">
+                        <thead>
+                            <tr style="background:#4facfe; color:white; position:sticky; top:0; z-index:10;">
+                                <th style="padding:8px; border:1px solid #ddd; min-width:40px; font-size:0.8em;">STT</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Họ và tên</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:50px; font-size:0.8em;">Title</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:150px; font-size:0.8em;">Mail</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:100px; font-size:0.8em;">Số điện thoại</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:80px; font-size:0.8em;">Ngày sinh</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:60px; font-size:0.8em;">Giới tính</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:80px; font-size:0.8em;">Học vấn</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Trường Đào tạo</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:100px; font-size:0.8em;">Chuyên ngành</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Vị trí hiện tại</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:150px; font-size:0.8em;">Kinh nghiệm công tác</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Vị trí ứng tuyển</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:60px; font-size:0.8em;">Xóa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="result-card raw-content" style="margin-top:30px;">
+                    <h3>📝 Nội dung gốc</h3>
+                    <pre id="rawContent"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PDF.js worker setup
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInfo = document.getElementById('fileInfo');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const loading = document.getElementById('loading');
+        const resultsSection = document.getElementById('resultsSection');
+
+        // Drag and drop events
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Validate file
+            const validTypes = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf'];
+            const maxSize = 10 * 1024 * 1024; // 10MB
+
+            if (!validTypes.includes(file.type)) {
+                showError('Vui lòng chọn file DOCX hoặc PDF');
+                return;
+            }
+
+            if (file.size > maxSize) {
+                showError('File không được vượt quá 10MB');
+                return;
+            }
+
+            // Show file info
+            fileInfo.innerHTML = `
+                <strong>File được chọn:</strong> ${file.name}<br>
+                <strong>Kích thước:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                <strong>Loại:</strong> ${file.type.includes('pdf') ? 'PDF' : 'DOCX'}
+            `;
+
+            // Process file
+            processFile(file);
+        }
+
+        async function processFile(file) {
+            showLoading(true);
+            hideError();
+            
+            try {
+                let extractedText = '';
+                let htmlContent = null;
+                
+                if (file.type.includes('pdf')) {
+                    extractedText = await extractTextFromPDF(file);
+                } else if (file.type.includes('wordprocessingml')) {
+                    const docxResult = await extractTextFromDOCX(file);
+                    extractedText = docxResult.text;
+                    htmlContent = docxResult.html;
+                    
+                    if (docxResult.checkboxGender) {
+
+                        // Sẽ được sử dụng trong analyzeCVContent
+                        window.docxCheckboxGender = docxResult.checkboxGender;
+                    }
+                }
+                
+                if (extractedText) {
+                    const cvInfo = analyzeCVContent(extractedText, htmlContent);
+                    displayResults(cvInfo, extractedText);
+                    showLoading(false);
+                } else {
+                    throw new Error('Không thể trích xuất nội dung từ file');
+                }
+            } catch (error) {
+                showLoading(false);
+                showError('Lỗi khi xử lý file: ' + error.message);
+            }
+        }
+
+        async function extractTextFromPDF(file) {
+            return new Promise((resolve, reject) => {
+                const fileReader = new FileReader();
+                fileReader.onload = async function() {
+                    try {
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let fullText = '';
+                        
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            
+                            // Sắp xếp text items theo vị trí trên trang
+                            const items = textContent.items.sort((a, b) => {
+                                // Sắp xếp theo chiều dọc trước (top to bottom)
+                                if (Math.abs(a.transform[5] - b.transform[5]) > 5) {
+                                    return b.transform[5] - a.transform[5];
+                                }
+                                // Sau đó sắp xếp theo chiều ngang (left to right)
+                                return a.transform[4] - b.transform[4];
+                            });
+                            
+                            let currentLine = '';
+                            let lastY = null;
+                            
+                            for (const item of items) {
+                                const y = item.transform[5];
+                                
+
+                                
+                                // Nếu là dòng mới (khác biệt về vị trí Y)
+                                if (lastY !== null && Math.abs(y - lastY) > 5) {
+                                    if (currentLine.trim()) {
+                                        fullText += currentLine.trim() + '\n';
+                                    }
+                                    currentLine = item.str;
+                                } else {
+                                    // Cùng dòng, nối text
+                                    if (currentLine && !currentLine.endsWith(' ') && !item.str.startsWith(' ')) {
+                                        currentLine += ' ';
+                                    }
+                                    currentLine += item.str;
+                                }
+                                
+                                lastY = y;
+                            }
+                            
+                            // Thêm dòng cuối cùng
+                            if (currentLine.trim()) {
+                                fullText += currentLine.trim() + '\n';
+                            }
+                        }
+                        
+                        resolve(fullText);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                fileReader.onerror = () => reject(new Error('Lỗi đọc file PDF'));
+                fileReader.readAsArrayBuffer(file);
+            });
+        }
+
+
+        
+
+
+        // Function sử dụng docx4js để parse DOCX với form controls
+        async function parseDocxWithDocx4js(arrayBuffer) {
+            try {
+                const docx = docx4js.load(arrayBuffer);
+                
+                // Traverse document để tìm form fields
+                let foundGender = null;
+                
+                docx.parse({
+                    "w:checkBox": function(node, parser) {
+
+                        
+                        // Kiểm tra checked state
+                        const checked = node.querySelector('w\\:checked, checked');
+                        const checkedValue = checked ? checked.getAttribute('w:val') || checked.getAttribute('val') : null;
+                        
+
+                        
+                        if (checkedValue === '1' || checkedValue === 'true') {
+                            // Tìm text gần checkbox
+                            const parentText = this.getParentText(node);
+
+                            
+                            if (/nam/i.test(parentText)) {
+                                foundGender = 'Nam';
+                            } else if (/nữ/i.test(parentText)) {
+                                foundGender = 'Nữ';
+                            }
+                        }
+                    },
+                    
+                    "w:fldChar": function(node, parser) {
+
+                        
+                        if (node.getAttribute('w:fldCharType') === 'begin') {
+                            // Tìm FORMCHECKBOX
+                            const nextNodes = this.getNextSiblings(node, 5);
+                            for (const sibling of nextNodes) {
+                                if (sibling.textContent && sibling.textContent.includes('FORMCHECKBOX')) {
+
+                                    // Logic xử lý form checkbox
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                return foundGender;
+                
+            } catch (error) {
+                console.error('Error with docx4js:', error);
+                return null;
+            }
+        }
+        
+        // Enhanced XML parsing with Unicode symbol detection
+        async function parseDocxXMLWithSymbols(arrayBuffer) {
+            try {
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                const documentXml = await zip.file("word/document.xml").async("text");
+                
+                // Tìm w:sym elements (Word symbols)
+                const symbolPattern = /<w:sym\s+w:font="[^"]*"\s+w:char="([^"]*)"/gi;
+                const symbols = [];
+                let match;
+                
+                while ((match = symbolPattern.exec(documentXml)) !== null) {
+                    const charCode = match[1];
+                    const unicodeChar = String.fromCharCode(parseInt(charCode, 16));
+                    symbols.push({
+                        charCode: charCode,
+                        unicodeChar: unicodeChar,
+                        position: match.index
+                    });
+
+                }
+                
+                // Tìm text runs xung quanh symbols
+                if (symbols.length > 0) {
+                    for (const symbol of symbols) {
+                        const surroundingXml = documentXml.substring(symbol.position - 1000, symbol.position + 1000);
+                        
+                        // Extract text từ XML xung quanh symbol
+                        const textMatches = surroundingXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+                        if (textMatches) {
+                            const surroundingTexts = textMatches.map(t => t.replace(/<[^>]*>/g, ''));
+                            const combinedText = surroundingTexts.join(' ').toLowerCase();
+                            
+
+                            
+                            // Check if this is checkbox symbol với gender
+                            if (combinedText.includes('giới') || combinedText.includes('tính')) {
+                                // Determine if it's checked symbol
+                                const checkedCodes = ['2611', '2713', '2714', '25A0', '25CF', '25C9']; // ☑✓✔■●◉
+                                
+                                if (checkedCodes.includes(symbol.charCode.toUpperCase())) {
+
+                                    
+                                    if (combinedText.includes('nam') && !combinedText.includes('nữ')) {
+                                        return 'Nam';
+                                    } else if (combinedText.includes('nữ') && !combinedText.includes('nam')) {
+                                        return 'Nữ';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Fallback: tìm direct Unicode symbols trong text content
+                const allTextPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+                const allTexts = [];
+                
+                while ((match = allTextPattern.exec(documentXml)) !== null) {
+                    allTexts.push(match[1]);
+                }
+                
+                const fullText = allTexts.join(' ');
+
+                
+                // Check for Unicode checkbox symbols directly in text
+                const symbolResult = analyzeWordSymbolCheckboxes(fullText);
+                if (symbolResult) {
+                    return symbolResult;
+                }
+                
+                return null;
+                
+            } catch (error) {
+                console.error('Error in XML symbol parsing:', error);
+                return null;
+            }
+        }
+
+        // Alternative: Parse bằng cách khác - đọc toàn bộ XML và regex
+        async function parseDocxAlternative(arrayBuffer) {
+            try {
+
+                
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                
+                // Đọc tất cả XML files có thể chứa form data
+                const files = ['word/document.xml', 'word/header1.xml', 'word/header2.xml', 'word/footer1.xml'];
+                
+                for (const fileName of files) {
+                    const file = zip.file(fileName);
+                    if (file) {
+                        const xmlContent = await file.async('text');
+
+                        
+
+                        if (xmlContent.toLowerCase().includes('giới')) {
+                            const genderSection = xmlContent.match(/.{0,500}giới.{0,500}/gi);
+                            if (genderSection) {
+
+                            }
+                        }
+                        
+                        // Tìm tất cả text elements xung quanh checkbox
+                        const genderResult = analyzeXMLForGender(xmlContent);
+                        if (genderResult) {
+                            return genderResult;
+                        }
+                    }
+                }
+                
+                // Method cuối: Thử tìm trong styles.xml và other files
+                const otherFiles = Object.keys(zip.files).filter(name => name.endsWith('.xml'));
+
+                
+                for (const fileName of otherFiles) {
+                    if (!files.includes(fileName)) {
+                        const file = zip.file(fileName);
+                        const content = await file.async('text');
+                        if (content.toLowerCase().includes('checkbox') || content.toLowerCase().includes('formfield')) {
+
+                        }
+                    }
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Error in alternative parsing:', error);
+                return null;
+            }
+        }
+        
+        // Helper function để analyze XML cho gender
+        function analyzeXMLForGender(xmlContent) {
+
+            
+            // Tìm tất cả text runs (w:t elements)
+            const textPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+            const allTexts = [];
+            let match;
+            
+            while ((match = textPattern.exec(xmlContent)) !== null) {
+                allTexts.push({
+                    text: match[1],
+                    index: match.index
+                });
+            }
+            
+
+            
+            // Tìm pattern gender với checkbox symbols hoặc spacing
+            for (let i = 0; i < allTexts.length; i++) {
+                const current = allTexts[i];
+                const text = current.text.toLowerCase();
+                
+                        // Pattern 1: Text có chứa checkbox symbols (expanded list)
+                        const checkboxSymbols = ['☐', '☑', '✓', '✔', '✗', '✘', '□', '■', '▢', '▣', 'þ', '◯', '●', '○', '◉', '∅', '⊗', '⊕'];
+                        const checkedSymbols = ['☑', '✓', '✔', '■', '▣', 'þ', '●', '◉', '⊗', '⊕'];
+                        
+                        const hasSymbol = checkboxSymbols.some(symbol => current.text.includes(symbol));
+                        if (hasSymbol) {
+
+                            
+                            // Kiểm tra symbol nào là checked
+                            for (const checkedSymbol of checkedSymbols) {
+                                if (current.text.includes(checkedSymbol)) {
+                                    if (/nam/i.test(current.text)) {
+                                        return 'Nam';
+                                    } else if (/nữ/i.test(current.text)) {
+                                        return 'Nữ';
+                                    }
+                                }
+                            }
+                        }                // Pattern 2: Tìm "giới tính" và check các text elements tiếp theo
+                if (text.includes('giới') && text.includes('tính')) {
+
+                    
+                    for (let j = i + 1; j < Math.min(i + 10, allTexts.length); j++) {
+                        const nextText = allTexts[j].text;
+
+                        
+                        // Kiểm tra nếu có tất cả options trong một dòng → skip
+                        if (/nam.*nữ/i.test(nextText) || /nữ.*nam/i.test(nextText)) {
+
+                            continue;
+                        }
+                        
+                        // Chỉ accept nếu là standalone gender
+                        if (/^\s*nam\s*$/i.test(nextText)) {
+                            return 'Nam';
+                        } else if (/^\s*nữ\s*$/i.test(nextText)) {
+                            return 'Nữ';
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        // Function mới để parse DOCX XML trực tiếp và tìm checkbox
+        async function parseDocxXMLForCheckbox(arrayBuffer) {
+            try {
+
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                const documentXml = await zip.file("word/document.xml").async("text");
+                
+
+                
+                // Tìm checkbox elements trong XML
+                const checkboxPatterns = [
+                    // Form checkbox elements
+                    /<w:checkBox[^>]*>[\s\S]*?<\/w:checkBox>/gi,
+                    /<w:fldChar[^>]*w:fldCharType="begin"[^>]*>[\s\S]*?<w:instrText[^>]*>\s*FORMCHECKBOX[\s\S]*?<w:fldChar[^>]*w:fldCharType="end"/gi,
+                    
+                    // Legacy form fields
+                    /<w:ffData[^>]*>[\s\S]*?<w:checkBox[^>]*>[\s\S]*?<\/w:ffData>/gi,
+                    
+                    // Content control checkboxes
+                    /<w:sdt[^>]*>[\s\S]*?<w:checkbox[^>]*>[\s\S]*?<\/w:sdt>/gi,
+                    
+                    // Symbol checkboxes (☐☑✓) 
+                    /<w:sym[^>]*w:char="[\u2610\u2611\u2713\u2714]"/gi
+                ];
+                
+                let foundCheckboxes = [];
+                
+                for (let i = 0; i < checkboxPatterns.length; i++) {
+                    const matches = documentXml.match(checkboxPatterns[i]);
+                    if (matches) {
+
+                        foundCheckboxes = foundCheckboxes.concat(matches);
+                    }
+                }
+                
+                if (foundCheckboxes.length > 0) {
+
+                    
+                    // Analyze checkbox states
+                    for (const checkbox of foundCheckboxes) {
+
+                        
+                        // Check for checked state
+                        const isChecked = checkbox.includes('w:checked="1"') || 
+                                        checkbox.includes('w:checked="true"') ||
+                                        checkbox.includes('w:default="1"') ||
+                                        checkbox.includes('\u2611') || // ☑
+                                        checkbox.includes('\u2713') || // ✓  
+                                        checkbox.includes('\u2714');   // ✔
+                                        
+
+                        
+                        if (isChecked) {
+                            // Tìm text gần checkbox để xác định gender
+                            const surroundingText = await findTextAroundCheckbox(documentXml, checkbox);
+
+                            
+                            if (/nam/i.test(surroundingText)) {
+                                return 'Nam';
+                            } else if (/nữ/i.test(surroundingText)) {
+                                return 'Nữ';
+                            }
+                        }
+                    }
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Error parsing DOCX XML:', error);
+                return null;
+            }
+        }
+        
+        // Function để detect Word symbol checkboxes
+        function analyzeWordSymbolCheckboxes(line) {
+
+            
+            // Word checkbox symbols thường dùng
+            const checkboxSymbols = [
+                '☐', '☑', '✓', '✔', '✗', '✘', 
+                '□', '■', '▢', '▣', 
+                'þ', // PDF style
+                '◯', '●', '○', '◉', // Circles
+                '∅', '⊗', '⊕', // Other symbols
+                '🗆', '🗇', // Ballot symbols
+            ];
+            
+
+            
+            // Tìm tất cả symbols trong dòng
+            const foundSymbols = [];
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (checkboxSymbols.includes(char)) {
+                    foundSymbols.push({
+                        symbol: char,
+                        position: i,
+                        context: line.substring(Math.max(0, i-10), Math.min(line.length, i+20))
+                    });
+                }
+            }
+            
+            if (foundSymbols.length > 0) {
+
+                
+                // Phân tích từng symbol
+                for (const symb of foundSymbols) {
+                    const beforeText = line.substring(0, symb.position).toLowerCase();
+                    const afterText = line.substring(symb.position + 1).toLowerCase();
+                    
+
+                    
+                    // Checked symbols
+                    const checkedSymbols = ['☑', '✓', '✔', '■', '▣', 'þ', '●', '◉', '⊗', '⊕'];
+                    
+                    if (checkedSymbols.includes(symb.symbol)) {
+                        
+                        // Tìm gender gần symbol này
+                        if (/nam/.test(afterText.slice(0, 10)) || /nam/.test(beforeText.slice(-10))) {
+                            return 'Nam';
+                        } else if (/nữ/.test(afterText.slice(0, 10)) || /nữ/.test(beforeText.slice(-10))) {
+                            return 'Nữ';
+                        }
+                    } else {
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        // Function để phân tích spacing patterns trong gender options
+        function analyzeSpacingForSelection(line) {
+            
+            // Trước tiên, thử tìm Word symbols
+            const symbolResult = analyzeWordSymbolCheckboxes(line);
+            if (symbolResult) {
+                return symbolResult;
+            }
+            
+            
+            // Tách các từ và khoảng trắng
+            const parts = line.split(/(\s+)/);
+            
+            // Tìm vị trí của Nam, Nữ, Khác
+            const namIndex = line.toLowerCase().indexOf('nam');
+            const nuIndex = line.toLowerCase().indexOf('nữ');
+            const khacIndex = line.toLowerCase().indexOf('khác');
+            
+            
+            // Phân tích số spaces giữa các option
+            if (namIndex !== -1 && nuIndex !== -1) {
+                const spaceBetweenNamNu = nuIndex - namIndex - 3; // 3 = length of "nam"
+                
+                if (nuIndex !== -1 && khacIndex !== -1) {
+                    const spaceBetweenNuKhac = khacIndex - nuIndex - 2; // 2 = length of "nữ"
+                    
+                    // Pattern analysis:
+                    // Nếu có spacing bất thường, có thể là indication
+                    if (spaceBetweenNamNu < spaceBetweenNuKhac / 2) {
+                        return 'Nam';
+                    } else if (spaceBetweenNuKhac < spaceBetweenNamNu / 2) {
+                        return 'Nữ';
+                    }
+                }
+            }
+            
+            // Kiểm tra character patterns đặc biệt
+            const hasSpecialCharsAroundNam = /[^\w\s]nam|nam[^\w\s]/i.test(line);
+            const hasSpecialCharsAroundNu = /[^\w\s]nữ|nữ[^\w\s]/i.test(line);
+            
+            if (hasSpecialCharsAroundNam && !hasSpecialCharsAroundNu) {
+                return 'Nam';
+            } else if (hasSpecialCharsAroundNu && !hasSpecialCharsAroundNam) {
+                return 'Nữ';
+            }
+            
+            return null;
+        }
+
+        // Helper function để tìm text xung quanh checkbox
+        async function findTextAroundCheckbox(documentXml, checkboxXml) {
+            // Tìm vị trí checkbox trong document
+            const checkboxIndex = documentXml.indexOf(checkboxXml.substring(0, 50));
+            
+            // Lấy text trước và sau checkbox (500 characters)
+            const start = Math.max(0, checkboxIndex - 500);
+            const end = Math.min(documentXml.length, checkboxIndex + checkboxXml.length + 500);
+            const surroundingXml = documentXml.substring(start, end);
+            
+            // Extract text từ XML surrounding area
+            const textPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+            let texts = [];
+            let match;
+            
+            while ((match = textPattern.exec(surroundingXml)) !== null) {
+                texts.push(match[1]);
+            }
+            
+            return texts.join(' ');
+        }
+
+        // Parse Wingdings checkbox symbols trong DOCX XML
+        function parseWingdingsCheckboxes(documentXml) {
+            
+
+            const EMPTY_CHECKBOX = 'F0A8';  // ☐
+            const CHECKED_CHECKBOX = 'F0FE'; // ☑
+            
+            // Tìm tất cả w:sym elements
+            const symbolPattern = /<w:sym\s+w:font="Wingdings"\s+w:char="([^"]*)"[^>]*>/g;
+            const symbols = [];
+            let match;
+            
+            while ((match = symbolPattern.exec(documentXml)) !== null) {
+                symbols.push({
+                    charCode: match[1],
+                    position: match.index,
+                    isChecked: match[1].toUpperCase() === CHECKED_CHECKBOX
+                });
+            }
+            
+            
+            if (symbols.length === 0) {
+                return null;
+            }
+            
+            // Tìm text elements xung quanh mỗi symbol
+            for (let i = 0; i < symbols.length; i++) {
+                const symbol = symbols[i];
+                
+                // Lấy XML context xung quanh symbol (±300 chars)
+                const start = Math.max(0, symbol.position - 300);
+                const end = Math.min(documentXml.length, symbol.position + 300);
+                const context = documentXml.substring(start, end);
+                
+                // Extract text từ context
+                const textMatches = context.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+                if (textMatches) {
+                    const texts = textMatches.map(t => t.replace(/<[^>]*>/g, '')).filter(t => t.trim());
+                    const contextText = texts.join(' ').toLowerCase();
+                    
+                    
+                    // Check if context contains gender info và symbol được check
+                    const hasGenderContext = contextText.includes('giới') || contextText.includes('tính');
+                    const hasNam = contextText.includes('nam');
+                    const hasNu = contextText.includes('nữ');
+                    
+                    if (symbol.isChecked && (hasNam || hasNu)) {
+                        
+                        if (hasNam && !hasNu) {
+                            return 'Nam';
+                        } else if (hasNu && !hasNam) {
+                            return 'Nữ';
+                        } else if (hasNam && hasNu) {
+                            // Context có cả Nam và Nữ - cần phân tích vị trí
+                            
+                            // Lấy exact context để phân tích
+                            const exactContext = texts.join(' ');
+                            
+                            // Tìm pattern checkbox gần từ nào hơn
+                            const namIndex = contextText.indexOf('nam');
+                            const nuIndex = contextText.indexOf('nữ');
+                            const totalLength = contextText.length;
+                            
+                            // Logic: nếu checkbox ở giữa "nam" và "nữ", thì có thể là cho "nữ"
+                            if (namIndex < nuIndex) {
+                                return 'Nữ';
+                            } else {
+                                return 'Nam';
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        async function extractTextFromDOCX(file) {
+            return new Promise((resolve, reject) => {
+                const fileReader = new FileReader();
+                fileReader.onload = async function() {
+                    try {
+                        
+                        // Extract text và XML
+                        const [textResult, zip] = await Promise.all([
+                            mammoth.extractRawText({arrayBuffer: this.result}),
+                            JSZip.loadAsync(this.result)
+                        ]);
+                        
+                        const documentXml = await zip.file("word/document.xml").async("text");
+                        
+                        // Parse Wingdings checkbox symbols
+                        const genderFromCheckbox = parseWingdingsCheckboxes(documentXml);
+                        if (genderFromCheckbox) {
+                            
+                            // Store result globally để sử dụng trong analyzeCVContent
+                            window.docxDetectedGender = genderFromCheckbox;
+                        } else {
+                        }
+                        
+                        // Also extract HTML for additional analysis
+                        const htmlResult = await mammoth.convertToHtml({arrayBuffer: this.result});
+                        
+                        // Return object with text, HTML, and checkbox gender
+                        resolve({
+                            text: textResult.value,
+                            html: htmlResult.value,
+                            checkboxGender: genderFromCheckbox
+                        });
+                        
+                    } catch (error) {
+                        console.error('DOCX Wingdings parsing error:', error);
+                        // Fallback to basic extraction
+                        try {
+                            const [textResult, htmlResult] = await Promise.all([
+                                mammoth.extractRawText({arrayBuffer: this.result}),
+                                mammoth.convertToHtml({arrayBuffer: this.result})
+                            ]);
+                            resolve({
+                                text: textResult.value,
+                                html: htmlResult.value,
+                                checkboxGender: null
+                            });
+                        } catch (fallbackError) {
+                            reject(fallbackError);
+                        }
+                    }
+                };
+                fileReader.onerror = () => reject(new Error('Lỗi đọc file DOCX'));
+                fileReader.readAsArrayBuffer(file);
+            });
+        }
+
+
+
+        function analyzeCVContent(text, htmlContent = null) {
+            const cvInfo = {
+                personal: {},
+                contact: {},
+                education: [],
+                experience: [],
+                skills: [],
+                other: {},
+                rawText: text // Thêm rawText để dùng trong các function khác
+            };
+
+            // Clean and normalize text
+            const cleanText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+            // Extract personal information
+            cvInfo.personal = extractPersonalInfo(cleanText);
+            
+            // Priority 1: Wingdings checkbox gender (most reliable)
+            if (!cvInfo.personal.gender && window.docxDetectedGender) {
+                cvInfo.personal.gender = window.docxDetectedGender;
+                // Clear after use
+                window.docxDetectedGender = null;
+            }
+            
+            // Priority 2: Nếu không tìm thấy gender từ text và có HTML content, thử parse HTML
+            if (!cvInfo.personal.gender && htmlContent) {
+                const htmlGender = analyzeHTMLContent(htmlContent);
+                if (htmlGender) {
+                    cvInfo.personal.gender = htmlGender;
+                }
+            }
+            
+            // Extract contact information
+            cvInfo.contact = extractContactInfo(cleanText);
+            
+            // Extract education
+            cvInfo.education = extractEducation(cleanText);
+            
+            // Extract experience
+            cvInfo.experience = extractExperience(cleanText);
+            
+            // Extract skills
+            cvInfo.skills = extractSkills(cleanText);
+            
+            // Extract other information
+            cvInfo.other = extractOtherInfo(cleanText);
+
+            return cvInfo;
+        }
+
+        // Function để kiểm tra xem text có phải tên hợp lệ không
+        function isInvalidName(text) {
+            const invalidKeywords = [
+                'THÔNG TIN ỨNG VIÊN',
+                'THÔNG TIN BẢN THÂN',
+                'THÔNG TIN CÁ NHÂN',
+                'HỌ VÀ TÊN',
+                'NGÀY SINH',
+                'GIỚI TÍNH',
+                'ĐỊA CHỈ',
+                'SỐ ĐIỆN THOẠI',
+                'EMAIL',
+                'HỌC VẤN',
+                'KINH NGHIỆM',
+                'KỸ NĂNG',
+                'MỤC TIÊU',
+                'SỞ THÍCH',
+                'CHỨNG CHỈ',
+                'DÀNH CHO',
+                'VỊ TRÍ ỨNG TUYỂN'
+            ];
+            
+            const upperText = text.toUpperCase().trim();
+            return invalidKeywords.some(keyword => upperText.includes(keyword));
+        }
+
+        function extractPersonalInfo(text) {
+            const personal = {};
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            
+
+            lines.forEach((line, index) => {
+            });
+            
+            // Tìm tên theo cấu trúc khác nhau của DOCX và PDF
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Case 1: PDF - Tên trong cùng dòng "Họ và tên (chữ in hoa) PHẠM YẾN LINH"
+                if (/họ\s*và\s*tên.*chữ\s*in\s*hoa/i.test(line)) {
+                    
+                    const nameInLinePattern = /họ\s*và\s*tên.*?chữ\s*in\s*hoa\s*([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ][A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ\s]+?)(?:\s*ngày|\s*$)/i;
+                    const inLineMatch = line.match(nameInLinePattern);
+                    if (inLineMatch) {
+                        const candidateName = inLineMatch[1].trim();
+                        
+                        if (!isInvalidName(candidateName)) {
+                            personal.name = candidateName;
+                            break;
+                        }
+                    }
+                    
+                    // Case 2: DOCX - Dòng "Họ và tên (chữ in hoa)" riêng biệt
+                    if (/họ\s*và\s*tên.*chữ\s*in\s*hoa\s*$/i.test(line)) {
+                        // Tìm tên trong các dòng tiếp theo cho đến khi gặp "Ngày sinh"
+                        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                            const nextLine = lines[j].trim();
+                            
+                            // Nếu gặp dòng "Ngày sinh" thì dừng
+                            if (/^ngày\s*sinh/i.test(nextLine)) {
+                                break;
+                            }
+                            
+                            // Tìm tên đầy đủ (chữ in hoa tiếng Việt, độ dài hợp lý) và không phải từ khóa
+                            if (/^[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ][A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ\s]{8,50}$/i.test(nextLine) && !isInvalidName(nextLine)) {
+                                personal.name = nextLine.trim();
+                                break;
+                            } else {
+                            }
+                        }
+                        if (personal.name) break;
+                    }
+                }
+                
+                // Pattern đặc biệt: Tìm tên PHẠM YẾN LINH trong dòng riêng biệt
+                if (/^PHẠM\s*YẾN\s*LINH$/i.test(line)) {
+                    personal.name = line.trim();
+                    break;
+                }
+                
+                // Pattern đơn giản: Tìm tên họ chỉ có chữ in hoa và khoảng trắng
+                if (/^[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ\s]+$/.test(line) && 
+                    line.length >= 10 && line.length <= 50 && 
+                    !isInvalidName(line) &&
+                    line.split(' ').length >= 2 && line.split(' ').length <= 5) {
+                    personal.name = line.trim();
+                    break;
+                }
+            }
+            
+            
+            // Nếu vẫn chưa tìm thấy tên, thử pattern dự phòng
+            if (!personal.name) {
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    
+                    // Các pattern dự phòng khác
+                    const alternativePatterns = [
+                        /(?:họ tên|họ và tên|tên|name)[:\s]*([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ][a-zA-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ\s]+)/i
+                    ];
+                    
+                    for (const pattern of alternativePatterns) {
+                        const altMatch = line.match(pattern);
+                        if (altMatch) {
+                            const candidateName = altMatch[1] ? altMatch[1].trim() : altMatch[0].trim();
+                            if (!isInvalidName(candidateName)) {
+                                personal.name = candidateName;
+                                break;
+                            }
+                        }
+                    }
+                    if (personal.name) break;
+                }
+            }
+            
+            // Tìm ngày sinh theo cấu trúc khác nhau của DOCX và PDF
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Case 1: PDF - "Ngày sinh 23/11/2003 Nơi sinh HÀ NỘI"
+                const pdfDobPattern = /ngày\s*sinh\s*(\d{1,2}\/\d{1,2}\/\d{4})/i;
+                const pdfDobMatch = line.match(pdfDobPattern);
+                if (pdfDobMatch) {
+                    personal.dateOfBirth = pdfDobMatch[1];
+                    break;
+                }
+                
+                // Case 2: DOCX - Dòng riêng biệt "Ngày sinh" rồi ngày ở dòng tiếp theo
+                if (/^ngày\s*sinh\s*$/i.test(line)) {
+                    // Tìm ngày sinh trong dòng tiếp theo
+                    if (i + 1 < lines.length) {
+                        const nextLine = lines[i + 1];
+                        const docxDobMatch = nextLine.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+                        if (docxDobMatch) {
+                            personal.dateOfBirth = docxDobMatch[1];
+                            break;
+                        }
+                    }
+                }
+                
+                // Pattern dự phòng: tìm ngày sinh trong cùng dòng với tên
+                const dobInLinePattern = /ngày\s*sinh\s*(\d{1,2}\/\d{1,2}\/\d{4})/i;
+                const dobInLineMatch = line.match(dobInLinePattern);
+                if (dobInLineMatch) {
+                    personal.dateOfBirth = dobInLineMatch[1];
+                    break;
+                }
+                
+                // Tìm ngày sinh sau tên (PDF có thể tách riêng)
+                if (personal.name && line.includes(personal.name)) {
+                    // Tìm ngày sinh trong cùng dòng với tên
+                    const dobAfterName = line.match(/(?:ngày|Ngày).*?(\d{1,2}\/\d{1,2}\/\d{4})/i);
+                    if (dobAfterName) {
+                        personal.dateOfBirth = dobAfterName[1];
+                        break;
+                    }
+                    
+                    // Tìm trong các dòng tiếp theo
+                    for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+                        const nextLine = lines[j];
+                        const dobNext = nextLine.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+                        if (dobNext) {
+                            personal.dateOfBirth = dobNext[1];
+                            break;
+                        }
+                    }
+                    if (personal.dateOfBirth) break;
+                }
+                
+                // Tìm ngày sinh trong dòng hiện tại với các pattern khác
+                const dobMatch = line.match(/(?:ngày sinh|sinh)[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})|^(\d{1,2}\/\d{1,2}\/\d{4})$/i);
+                if (dobMatch) {
+                    personal.dateOfBirth = dobMatch[1] || dobMatch[2];
+                    break;
+                }
+            }
+            
+
+            
+            // Tìm giới tính với nhiều pattern bao gồm checkbox
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Case 1: Enhanced checkbox patterns với Word symbols
+                const checkboxSymbols = ['☐', '☑', '✓', '✔', '✗', '✘', '□', '■', '▢', '▣', 'þ', '◯', '●', '○', '◉', '∅', '⊗', '⊕', 'xX'];
+                const checkedSymbols = ['☑', '✓', '✔', '■', '▣', 'þ', '●', '◉', '⊗', '⊕', 'xX'];
+                
+                const checkboxPatterns = [
+                    // Expanded symbol patterns
+                    new RegExp(`[${checkedSymbols.join('')}]\\s*(nam|nữ)`, 'i'),
+                    new RegExp(`(nam|nữ)\\s*[${checkedSymbols.join('')}]`, 'i'),
+                    
+                    // Specific Word symbols
+                    /[■●◉⊗⊕]\s*(nam|nữ)/i,
+                    /(nam|nữ)\s*[■●◉⊗⊕]/i,
+                    
+                    // Empty vs filled patterns
+                    /[☐□○◯]\s*nam[^■●◉⊗⊕]*[■●◉⊗⊕]\s*nữ/i,
+                    /[☐□○◯]\s*nữ[^■●◉⊗⊕]*[■●◉⊗⊕]\s*nam/i,
+                    /[■●◉⊗⊕]\s*nam[^■●◉⊗⊕]*[☐□○◯]\s*nữ/i,
+                    /[■●◉⊗⊕]\s*nữ[^■●◉⊗⊕]*[☐□○◯]\s*nam/i,
+                    
+                    // Pattern "Giới tính" với symbols
+                    new RegExp(`giới\\s*tính[:\\s]*[${checkboxSymbols.join('')}\\s]*(nam|nữ)[${checkboxSymbols.join('')}\\s]*(nam|nữ)`, 'i')
+                ];
+                
+                for (let p = 0; p < checkboxPatterns.length; p++) {
+                    const pattern = checkboxPatterns[p];
+                    const match = line.match(pattern);
+                    if (match) {
+                        
+                        // Xác định giá trị được chọn dựa trên symbol
+                        const fullMatch = match[0];
+                        const hasCheckedSymbolWithNam = new RegExp(`[${checkedSymbols.join('')}].*nam`, 'i').test(fullMatch);
+                        const hasCheckedSymbolWithNu = new RegExp(`[${checkedSymbols.join('')}].*nữ`, 'i').test(fullMatch);
+                        const hasNamWithCheckedSymbol = new RegExp(`nam.*[${checkedSymbols.join('')}]`, 'i').test(fullMatch);
+                        const hasNuWithCheckedSymbol = new RegExp(`nữ.*[${checkedSymbols.join('')}]`, 'i').test(fullMatch);
+                        
+                        if ((hasCheckedSymbolWithNam || hasNamWithCheckedSymbol) && !(hasCheckedSymbolWithNu || hasNuWithCheckedSymbol)) {
+                            personal.gender = 'Nam';
+                            break;
+                        } else if ((hasCheckedSymbolWithNu || hasNuWithCheckedSymbol) && !(hasCheckedSymbolWithNam || hasNamWithCheckedSymbol)) {
+                            personal.gender = 'Nữ';
+                            break;
+                        }
+                    }
+                }
+                
+                if (personal.gender) break;
+                
+                // Case 1.5: Check if có symbols trong dòng hiện tại và gender trong dòng gần đó
+                const hasAnySymbol = checkboxSymbols.some(symbol => line.includes(symbol));
+                if (hasAnySymbol && /giới|tính/i.test(line)) {
+                    
+                    // Kiểm tra 3 dòng tiếp theo
+                    for (let nextIdx = i + 1; nextIdx < Math.min(i + 4, lines.length); nextIdx++) {
+                        const nextLine = lines[nextIdx];
+                        
+                        // Tìm checked symbols trong dòng này
+                        const checkedSymbolsInLine = checkedSymbols.filter(symbol => nextLine.includes(symbol));
+                        if (checkedSymbolsInLine.length > 0) {
+                            
+                            if (/nam/i.test(nextLine) && !/nữ/i.test(nextLine)) {
+                                personal.gender = 'Nam';
+                                break;
+                            } else if (/nữ/i.test(nextLine) && !/nam/i.test(nextLine)) {
+                                personal.gender = 'Nữ';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (personal.gender) break;
+                }
+                
+                // Case 2: DOCX patterns - không có checkbox symbols
+                if (/giới\s*tính/i.test(line)) {
+                    
+                    // Tìm giới tính trong cùng dòng
+                    const sameLine = line.match(/giới\s*tính[:\s]*(nam|nữ)/i);
+                    if (sameLine) {
+                        personal.gender = sameLine[1];
+                        break;
+                    }
+                    
+                    // Tìm trong dòng tiếp theo
+                    if (i + 1 < lines.length) {
+                        const nextLine = lines[i + 1].trim();
+                        if (/^(nam|nữ)$/i.test(nextLine)) {
+                            personal.gender = nextLine;
+                            break;
+                        }
+                    }
+                    
+                    // DOCX: Kiểm tra pattern nhiều dòng với Nam/Nữ
+                    for (let j = i; j < Math.min(i + 5, lines.length); j++) {
+                        const checkLine = lines[j];
+                        
+                        // Kiểm tra nếu là dòng có tất cả options (Nam Nữ Khác)
+                        if (/nam.*nữ.*khác/i.test(checkLine) || /nam\s+nữ/i.test(checkLine)) {
+                            
+                            // Thử phân tích spacing để detect selection
+                            const genderFromSpacing = analyzeSpacingForSelection(checkLine);
+                            if (genderFromSpacing) {
+                                personal.gender = genderFromSpacing;
+                                break;
+                            } else {
+                                personal.gender = 'KHÔNG XÁC ĐỊNH ĐƯỢC - TỰ ĐIỀN ĐI BRO';
+                                break;
+                            }
+                        }
+                        // Chỉ accept "Nam" hoặc "Nữ" nếu chúng đứng HOÀN TOÀN một mình
+                        else if (/^nam$/i.test(checkLine.trim())) {
+                            personal.gender = 'Nam';
+                            break;
+                        } else if (/^nữ$/i.test(checkLine.trim())) {
+                            personal.gender = 'Nữ';
+                            break;
+                        }
+                    }
+                    
+                    if (personal.gender) break;
+                }
+                
+                // Case 3: Tìm giới tính gần ngày sinh
+                if (personal.dateOfBirth && line.includes(personal.dateOfBirth)) {
+                    const genderNearDate = line.match(/\d{1,2}\/\d{1,2}\/\d{4}\s*(nam|nữ)/i);
+                    if (genderNearDate) {
+                        personal.gender = genderNearDate[1];
+                        break;
+                    }
+                }
+                
+                // Case 4: Table structure pattern - tìm trong cấu trúc bảng CV
+                const tablePatterns = [
+                    // Pattern: | Giới tính | Nam | hoặc tương tự
+                    /\|\s*giới\s*tính\s*\|\s*(nam|nữ)\s*\|/i,
+                    /giới\s*tính\s*:\s*(nam|nữ)/i,
+                    /giới\s*tính\s*-\s*(nam|nữ)/i,
+                    /giới\s*tính\s+\|\s*(nam|nữ)/i
+                ];
+                
+                for (const tablePattern of tablePatterns) {
+                    const tableMatch = line.match(tablePattern);
+                    if (tableMatch) {
+                        personal.gender = tableMatch[1];
+                        break;
+                    }
+                }
+                
+                if (personal.gender) break;
+            }
+            
+            // Final fallback - search for any gender keywords
+            if (!personal.gender) {
+                const fullText = text.toLowerCase();
+                if (fullText.includes('nam') && !fullText.includes('nữ')) {
+                    personal.gender = 'Nam';
+                } else if (fullText.includes('nữ') && !fullText.includes('nam')) {
+                    personal.gender = 'Nữ';
+                } else if (fullText.includes('nam') && fullText.includes('nữ')) {
+                } else {
+                }
+            }
+            
+            return personal;
+        }
+
+        function extractContactInfo(text) {
+            const contact = {};
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            
+            // Tìm email sau tiêu đề hoặc trong text
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Kiểm tra tiêu đề email
+                if (/^(email|mail|e-mail)$/i.test(line)) {
+                    if (i + 1 < lines.length) {
+                        const nextLine = lines[i + 1];
+                        const emailMatch = nextLine.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                        if (emailMatch) {
+                            contact.email = emailMatch[1];
+                            break;
+                        }
+                    }
+                }
+                
+                // Tìm email trong dòng hiện tại
+                const emailMatch = line.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                if (emailMatch) {
+                    contact.email = emailMatch[1];
+                    break;
+                }
+            }
+            
+            // Tìm số điện thoại chỉ sau chữ "Điện thoại"
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                if (/điện\s*thoại/i.test(line)) {
+                    
+                    // Tìm số trong cùng dòng sau từ "điện thoại"
+                    const sameLineMatch = line.match(/điện\s*thoại[:\s]*([0-9]+)/i);
+                    if (sameLineMatch) {
+                        contact.phone = sameLineMatch[1];
+                        break;
+                    }
+                    
+                    // Tìm số trong dòng kế tiếp
+                    if (i + 1 < lines.length) {
+                        const nextLine = lines[i + 1];
+                        const phoneMatch = nextLine.match(/^([0-9]+)/);
+                        if (phoneMatch) {
+                            contact.phone = phoneMatch[1];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return contact;
+        }
+
+        function extractEducation(text) {
+            const educationSectionMatch = text.match(/QUÁ\s*TRÌNH\s*HỌC\s*TẬP(.*?)QUÁ\s*TRÌNH\s*CÔNG\s*TÁC/is);
+            
+            if (!educationSectionMatch) {
+                return [];
+            }
+            
+            const educationSection = educationSectionMatch[1].trim();
+            const lines = educationSection.split('\n').map(line => line.trim()).filter(line => line);
+            const education = [];
+            
+            for (const line of lines) {
+                if (!line || line.length < 3) continue;
+                
+                let educationType = '';
+                const lineLower = line.toLowerCase();
+                
+                if (lineLower.includes('cao học') || lineLower.includes('thạc sĩ') || lineLower.includes('master')) {
+                    educationType = 'Cao học';
+                } else if (lineLower.includes('đại học') || lineLower.includes('cử nhân') || lineLower.includes('bachelor') || 
+                          lineLower.includes('university') || lineLower.includes('college')) {
+                    educationType = 'Đại học';
+                } else if (lineLower.includes('tiến sĩ') || lineLower.includes('phd') || lineLower.includes('doctorate')) {
+                    educationType = 'Tiến sĩ';
+                } else {
+                    educationType = 'Đại học';
+                }
+                
+                const educationEntry = {
+                    level: educationType,
+                    details: line,
+                    raw: line
+                };
+                
+                education.push(educationEntry);
+            }
+            
+            return education;
+        }
+
+        function extractExperience(text) {
+            const experienceMatch = text.match(/QUÁ\s*TRÌNH\s*CÔNG\s*TÁC(.*?)(?=VỊ\s*TRÍ\s*ỨNG\s*TUYỂN|$)/is);
+            
+            if (!experienceMatch) {
+                const experience = [];
+                const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+                
+                for (const line of lines) {
+                    const expPattern = /(\d{1,2}\/20\d{2})\s*-\s*(\d{1,2}\/20\d{2}|nay|hiện tại)[:\s]*([^\n]+)/i;
+                    const match = line.match(expPattern);
+                    
+                    if (match) {
+                        const timeRange = `${match[1]} - ${match[2]}`;
+                        const description = match[3].trim();
+                        
+                        experience.push({
+                            timeRange,
+                            description,
+                            raw: line,
+                            isCurrent: /nay|hiện tại/i.test(match[2])
+                        });
+                    }
+                }
+                
+                return experience;
+            }
+            
+            const experienceSection = experienceMatch[1].trim();
+            const lines = experienceSection.split('\n').map(line => line.trim()).filter(line => line);
+            const experience = [];
+            
+            for (const line of lines) {
+                if (!line || line.length < 5) continue;
+                
+                const expPattern = /(\d{1,2}\/20\d{2})\s*-\s*(\d{1,2}\/20\d{2}|nay|hiện tại)[:\s]*(.+)/i;
+                const match = line.match(expPattern);
+                
+                if (match) {
+                    const timeRange = `${match[1]} - ${match[2]}`;
+                    const description = match[3].trim();
+                    const isCurrent = /nay|hiện tại/i.test(match[2]);
+                    
+                    let position = '';
+                    let company = '';
+                    
+                    const posCompanyMatch = description.match(/^([^-]+?)\s*[-–—]\s*(.+)$/);
+                    if (posCompanyMatch) {
+                        position = posCompanyMatch[1].trim();
+                        company = posCompanyMatch[2].trim();
+                    } else {
+                        position = description;
+                    }
+                    
+                    const experienceEntry = {
+                        timeRange,
+                        position,
+                        company,
+                        description,
+                        raw: line,
+                        isCurrent
+                    };
+                    
+                    experience.push(experienceEntry);
+                }
+            }
+            
+            return experience;
+        }
+
+        function extractSkills(text) {
+            const skills = [];
+            const skillKeywords = ['kỹ năng', 'skills', 'technical', 'programming', 'ngôn ngữ'];
+            
+            // Common technical skills
+            const techSkills = [
+                'JavaScript', 'Python', 'Java', 'C++', 'C#', 'PHP', 'Ruby', 'Go', 'Swift',
+                'HTML', 'CSS', 'React', 'Angular', 'Vue', 'Node.js', 'Express',
+                'MySQL', 'PostgreSQL', 'MongoDB', 'Redis',
+                'Git', 'Docker', 'Kubernetes', 'AWS', 'Azure',
+                'Photoshop', 'Illustrator', 'Figma', 'Sketch'
+            ];
+            
+            techSkills.forEach(skill => {
+                if (text.toLowerCase().includes(skill.toLowerCase())) {
+                    skills.push(skill);
+                }
+            });
+            
+            // Language skills
+            const languages = ['English', 'Tiếng Anh', 'Chinese', 'Tiếng Trung', 'Japanese', 'Tiếng Nhật'];
+            languages.forEach(lang => {
+                if (text.toLowerCase().includes(lang.toLowerCase())) {
+                    skills.push(lang);
+                }
+            });
+            
+            return [...new Set(skills)]; // Remove duplicates
+        }
+
+        function extractOtherInfo(text) {
+            const other = {};
+            
+            // Objective/Summary
+            const objectiveMatch = text.match(/(?:mục tiêu|objective|summary|tóm tắt)[:\s]*([^\n]{20,200})/i);
+            if (objectiveMatch) {
+                other.objective = objectiveMatch[1].trim();
+            }
+            
+            // Hobbies
+            const hobbiesMatch = text.match(/(?:sở thích|hobbies|interests)[:\s]*([^\n]{10,100})/i);
+            if (hobbiesMatch) {
+                other.hobbies = hobbiesMatch[1].trim();
+            }
+            
+            // References
+            if (text.toLowerCase().includes('reference') || text.toLowerCase().includes('người giới thiệu')) {
+                other.hasReferences = true;
+            }
+            
+            return other;
+        }
+
+        // Danh sách lưu trữ CV
+        let cvList = JSON.parse(localStorage.getItem('cvList') || '[]');
+        let currentCV = null;
+
+        function displayResults(cvInfo, rawText) {
+            currentCV = extractTableRow(cvInfo);
+            renderTable();
+            
+            document.getElementById('rawContent').textContent = rawText.substring(0, 2000) + (rawText.length > 2000 ? '\n... (nội dung đã được cắt bớt)' : '');
+            resultsSection.style.display = 'block';
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function extractTableRow(cvInfo) {
+            return {
+                name: (cvInfo.personal.name || '').toUpperCase(),
+                title: guessTitle(cvInfo),
+                mail: cvInfo.contact.email || '',
+                phone: cvInfo.contact.phone || '',
+                dob: cvInfo.personal.dateOfBirth || '',
+                gender: cvInfo.personal.gender || '',
+                education: guessEducationLevel(cvInfo),
+                school: guessSchool(cvInfo),
+                major: guessMajor(cvInfo),
+                currentPosition: guessCurrentPosition(cvInfo),
+                experience: guessExperience(cvInfo),
+                appliedPosition: guessAppliedPosition(cvInfo)
+            };
+        }
+
+        function guessTitle(cvInfo) {
+            // Dựa vào giới tính để xác định title
+            const gender = (cvInfo.personal.gender || '').toLowerCase();
+            if (gender.includes('nam') || gender.includes('male')) return 'ÔNG';
+            if (gender.includes('nữ') || gender.includes('female')) return 'BÀ';
+            return '';
+        }
+        
+        function guessEducationLevel(cvInfo) {
+            if (Array.isArray(cvInfo.education) && cvInfo.education.length > 0) {
+                const firstEntry = cvInfo.education[0];
+                if (typeof firstEntry === 'object' && firstEntry.level) {
+                    return firstEntry.level;
+                }
+            }
+            
+            const eduText = Array.isArray(cvInfo.education) ? 
+                cvInfo.education.join(' ').toLowerCase() : 
+                (cvInfo.education || '').toLowerCase();
+                
+            if (eduText.includes('cao học') || eduText.includes('master') || eduText.includes('thạc sĩ')) {
+                return 'Cao học';
+            }
+            if (eduText.includes('đại học') || eduText.includes('university') || eduText.includes('bachelor')) {
+                return 'Đại học';
+            }
+            if (eduText.includes('cao đẳng') || eduText.includes('college')) {
+                return 'Cao đẳng';
+            }
+            
+            return '';
+        }
+        
+        function guessSchool(cvInfo) {
+            for (const edu of cvInfo.education) {
+                const eduText = typeof edu === 'object' ? edu.details : edu;
+                
+                const schoolMatch = eduText.match(/(Đại học [^-]+|[A-Z][a-z\s]+ University|FPT [^-]+)/i);
+                if (schoolMatch) {
+                    return schoolMatch[1].trim();
+                }
+            }
+            return '';
+        }
+        
+        function guessMajor(cvInfo) {
+            for (const edu of cvInfo.education) {
+                const eduText = typeof edu === 'object' ? edu.details : edu;
+                
+                const majorMatch = eduText.match(/-\s*([^\n]+)$/);
+                if (majorMatch) {
+                    return majorMatch[1].trim();
+                }
+                
+                if (eduText.toLowerCase().includes('digital marketing')) {
+                    return 'Digital Marketing';
+                }
+            }
+            return '';
+        }
+        
+        function guessCurrentPosition(cvInfo) {
+            if (!Array.isArray(cvInfo.experience) || cvInfo.experience.length === 0) {
+                return '';
+            }
+            
+            let currentPosition = '';
+            let structuredExperiences = cvInfo.experience.filter(exp => 
+                typeof exp === 'object' && exp !== null && exp.timeRange
+            );
+            
+            
+            if (structuredExperiences.length > 0) {
+                structuredExperiences.sort((a, b) => {
+                    const getStartTime = (exp) => {
+                        const match = exp.timeRange.match(/(\d{1,2})\/(\d{4})/);
+                        if (match) {
+                            const year = parseInt(match[2]);
+                            const month = parseInt(match[1]);
+                            return year * 12 + month;
+                        }
+                        return 0;
+                    };
+                    return getStartTime(b) - getStartTime(a);
+                });
+                
+                const latestJob = structuredExperiences[0];
+                
+                if (latestJob && (latestJob.isCurrent === true || 
+                    String(latestJob.isCurrent).toLowerCase() === 'true' || 
+                    /nay|hiện tại/i.test(latestJob.timeRange))) {
+                    currentPosition = latestJob.position || 
+                                    (latestJob.description ? latestJob.description.split('-')[0].trim() : '');
+                }
+            }
+            
+            // Fallback: parse từ experience text (old format)
+            if (!currentPosition) {
+                for (const exp of cvInfo.experience) {
+                    const expText = typeof exp === 'object' ? exp.raw || exp.description : exp;
+                    
+                    if (/nay|hiện tại|present|current/i.test(expText)) {
+                        
+                        // Pattern để tìm vị trí trong format "time: position - company"
+                        const positionMatch = expText.match(/(?:\d+\/\d+\s*-\s*(?:nay|hiện tại)[:\s]*([^-]+?)(?:\s*-|$))/i) ||
+                                           expText.match(/[:\s]+([^-]+?)\s*-/);
+                        
+                        if (positionMatch) {
+                            currentPosition = positionMatch[1].trim();
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!currentPosition) {
+            }
+            
+            return currentPosition;
+        }
+        
+        function guessExperience(cvInfo) {
+            
+            if (!Array.isArray(cvInfo.experience) || cvInfo.experience.length === 0) {
+                return '';
+            }
+            
+            const formattedExperience = [];
+            
+            cvInfo.experience.forEach((exp, idx) => {
+                
+                if (typeof exp === 'object' && exp !== null && exp.timeRange) {
+                    
+                    // Format: "MM/YYYY - MM/YYYY: Vị trí - Công ty" hoặc fallback to description
+                    const timeRange = exp.timeRange || 'Unknown Time';
+                    let formatted = '';
+                    
+                    if (exp.position && exp.company) {
+                        formatted = `${timeRange}: ${exp.position} - ${exp.company}`;
+                    } else if (exp.position) {
+                        formatted = `${timeRange}: ${exp.position}`;
+                    } else if (exp.description) {
+                        formatted = `${timeRange}: ${exp.description}`;
+                    } else {
+                        formatted = `${timeRange}: Unknown Position`;
+                    }
+                    
+                    formattedExperience.push(formatted);
+                } else {
+                    const expText = typeof exp === 'string' ? exp : 
+                                  (exp && exp.raw) ? exp.raw : 
+                                  (exp && exp.description) ? exp.description : 
+                                  String(exp);
+                    
+                    if (expText && expText.trim() && expText.trim() !== 'null' && expText.trim() !== 'undefined') {
+                        formattedExperience.push(expText.trim());
+                    }
+                }
+            });
+            
+            return formattedExperience.join('\n');
+        }
+        
+        function guessAppliedPosition(cvInfo) {
+            const text = cvInfo.rawText || '';
+            
+            // Tìm đoạn từ "Nơi làm việc" đến "THÔNG TIN BẢN THÂN"
+            const startPattern = /nơi\s*làm\s*việc/i;
+            const endPattern = /thông\s*tin\s*bản\s*thân/i;
+            
+            const startMatch = text.search(startPattern);
+            const endMatch = text.search(endPattern);
+            
+            if (startMatch === -1) {
+                return '';
+            }
+            
+            // Lấy đoạn text từ sau "Nơi làm việc" đến trước "THÔNG TIN BẢN THÂN"
+            const startIndex = startMatch + text.match(startPattern)[0].length;
+            const endIndex = endMatch !== -1 ? endMatch : text.length;
+            const sectionText = text.substring(startIndex, endIndex).trim();
+            
+            if (!sectionText) {
+                return '';
+            }
+            
+            // Tách thành các dòng và lọc bỏ dòng trống
+            const lines = sectionText.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            const positions = [];
+            
+            lines.forEach((line, index) => {
+                // Bỏ qua các dòng không liên quan
+                if (/^(nơi\s*làm\s*việc|địa\s*chỉ|location|vị\s*trí\s*ứng\s*tuyển)$/i.test(line)) {
+                    return;
+                }
+                
+                // Bỏ qua dòng chỉ có ký tự đặc biệt hoặc quá ngắn
+                if (line.length < 3 || /^[\s\-_=\.:\|]+$/.test(line)) {
+                    return;
+                }
+                
+                // Kiểm tra xem dòng có phải là vị trí ứng tuyển không
+                if (line.length >= 3) {
+                    // Nếu dòng đã có số thứ tự thì giữ nguyên
+                    if (/^\d+\.\s/.test(line)) {
+                        positions.push(line);
+                    } else {
+                        // Nếu chưa có số thứ tự thì thêm vào
+                        positions.push(`${positions.length + 1}. ${line}`);
+                    }
+                }
+            });
+            
+            return positions.join(' ');
+        }
+
+        function renderTable() {
+            const body = document.getElementById('resultsBody');
+            if (!body) return; // Safety check
+            body.innerHTML = '';
+            let allCVs = [...cvList];
+            if (currentCV) allCVs.push(currentCV);
+            allCVs.forEach((cv, idx) => {
+                body.innerHTML += `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${cv.name}</td>
+                    <td>${cv.title}</td>
+                    <td>${cv.mail}</td>
+                    <td>${cv.phone}</td>
+                    <td>${cv.dob}</td>
+                    <td>${cv.gender}</td>
+                    <td>${cv.education}</td>
+                    <td>${cv.school}</td>
+                    <td>${cv.major}</td>
+                    <td>${cv.currentPosition}</td>
+                    <td>${cv.experience}</td>
+                    <td>${cv.appliedPosition}</td>
+                    <td><button onclick="deleteCV(${idx})" class="delete-btn">Xóa</button></td>
+                </tr>`;
+            });
+        }
+
+        function deleteCV(idx) {
+            if (idx < cvList.length) {
+                cvList.splice(idx, 1);
+                localStorage.setItem('cvList', JSON.stringify(cvList));
+                renderTable();
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) {
+                saveBtn.onclick = function() {
+                    if (currentCV) {
+                        cvList.push(currentCV);
+                        localStorage.setItem('cvList', JSON.stringify(cvList));
+                        currentCV = null;
+                        renderTable();
+                        showSuccess('Đã lưu thông tin CV thành công!');
+                    }
+                };
+            }
+            
+            // Hiển thị dữ liệu đã lưu khi tải trang
+            if (cvList.length > 0) {
+                document.getElementById('resultsSection').style.display = 'block';
+                renderTable();
+            }
+        });
+
+        function translateKey(key) {
+            const translations = {
+                'name': 'Họ tên',
+                'dateOfBirth': 'Ngày sinh',
+                'gender': 'Giới tính',
+                'address': 'Địa chỉ',
+                'phone': 'Điện thoại',
+                'email': 'Email',
+                'linkedin': 'LinkedIn',
+                'facebook': 'Facebook',
+                'objective': 'Mục tiêu',
+                'hobbies': 'Sở thích',
+                'hasReferences': 'Có người giới thiệu'
+            };
+            return translations[key] || key;
+        }
+
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            let errorDiv = document.querySelector('.error');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                uploadSection.appendChild(errorDiv);
+            }
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            const errorDiv = document.querySelector('.error');
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
+        }
+        
+        function showSuccess(message) {
+            let successDiv = document.querySelector('.success');
+            if (!successDiv) {
+                successDiv = document.createElement('div');
+                successDiv.className = 'success';
+                uploadSection.appendChild(successDiv);
+            }
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

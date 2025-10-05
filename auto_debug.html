@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Debug CV Extraction</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; background: #f9f9f9; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+        .result-table { margin: 20px 0; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Auto Debug CV Extraction System</h1>
+    <div id="debugOutput"></div>
+    <div id="results"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        const debugOutput = document.getElementById('debugOutput');
+        const results = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            debugOutput.appendChild(div);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function createDebugSection(title, content) {
+            const section = document.createElement('div');
+            section.className = 'debug-section';
+            section.innerHTML = `<h3>${title}</h3><pre>${content}</pre>`;
+            debugOutput.appendChild(section);
+        }
+
+        // Mock functions from convert.html for testing
+        function extractPersonalInfo(text) {
+            const personal = {};
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            
+            log(`Analyzing ${lines.length} lines for personal info`, 'info');
+            
+            // Find name
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (/^[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴ\s]+$/.test(line) && 
+                    line.length >= 10 && line.length <= 50 && 
+                    line.split(' ').length >= 2) {
+                    personal.name = line.trim();
+                    log(`Name found: "${personal.name}"`, 'success');
+                    break;
+                }
+            }
+            
+            // Find date of birth
+            for (const line of lines) {
+                const dobMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+                if (dobMatch) {
+                    personal.dateOfBirth = dobMatch[1];
+                    log(`Date of birth found: "${personal.dateOfBirth}"`, 'success');
+                    break;
+                }
+            }
+            
+            // Find gender
+            for (const line of lines) {
+                if (/giới\s*tính/i.test(line)) {
+                    const genderMatch = line.match(/giới\s*tính[:\s]*(nam|nữ)/i);
+                    if (genderMatch) {
+                        personal.gender = genderMatch[1];
+                        log(`Gender found: "${personal.gender}"`, 'success');
+                        break;
+                    }
+                }
+            }
+            
+            return personal;
+        }
+        
+        function extractContactInfo(text) {
+            const contact = {};
+            
+            // Find email
+            const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (emailMatch) {
+                contact.email = emailMatch[1];
+                log(`Email found: "${contact.email}"`, 'success');
+            } else {
+                log(`Email not found`, 'warning');
+            }
+            
+            // Find phone
+            const phoneMatch = text.match(/điện\s*thoại[:\s]*([0-9]+)/i);
+            if (phoneMatch) {
+                contact.phone = phoneMatch[1];
+                log(`Phone found: "${contact.phone}"`, 'success');
+            } else {
+                log(`Phone not found`, 'warning');
+            }
+            
+            return contact;
+        }
+        
+        function extractEducation(text) {
+            const educationMatch = text.match(/QUÁ\s*TRÌNH\s*HỌC\s*TẬP(.*?)QUÁ\s*TRÌNH\s*CÔNG\s*TÁC/is);
+            
+            if (!educationMatch) {
+                log('Education section not found between "QUÁ TRÌNH HỌC TẬP" and "QUÁ TRÌNH CÔNG TÁC"', 'warning');
+                return [];
+            }
+            
+            const educationSection = educationMatch[1].trim();
+            log(`Education section found: "${educationSection.substring(0, 100)}..."`, 'success');
+            
+            const lines = educationSection.split('\n').filter(line => line.trim());
+            const education = lines.map(line => ({
+                level: 'Đại học',
+                details: line.trim()
+            }));
+            
+            log(`Found ${education.length} education entries`, 'info');
+            return education;
+        }
+        
+        function extractExperience(text) {
+            const experienceMatch = text.match(/QUÁ\s*TRÌNH\s*CÔNG\s*TÁC(.*?)(?=VỊ\s*TRÍ\s*ỨNG\s*TUYỂN|$)/is);
+            
+            if (!experienceMatch) {
+                log('Experience section not found', 'warning');
+                return [];
+            }
+            
+            const experienceSection = experienceMatch[1].trim();
+            log(`Experience section found: "${experienceSection.substring(0, 100)}..."`, 'success');
+            
+            const lines = experienceSection.split('\n').filter(line => line.trim());
+            const experience = [];
+            
+            for (const line of lines) {
+                const expMatch = line.match(/(\d{1,2}\/20\d{2})\s*-\s*(\d{1,2}\/20\d{2}|nay|hiện tại)[:\s]*(.+)/i);
+                if (expMatch) {
+                    const timeRange = `${expMatch[1]} - ${expMatch[2]}`;
+                    const description = expMatch[3].trim();
+                    const isCurrent = /nay|hiện tại/i.test(expMatch[2]);
+                    
+                    experience.push({
+                        timeRange,
+                        description,
+                        isCurrent,
+                        raw: line
+                    });
+                }
+            }
+            
+            log(`Found ${experience.length} experience entries`, 'info');
+            return experience;
+        }
+        
+        function guessCurrentPosition(cvInfo) {
+            log('=== DETERMINING CURRENT POSITION ===', 'info');
+            
+            if (!Array.isArray(cvInfo.experience) || cvInfo.experience.length === 0) {
+                log('No experience data available', 'warning');
+                return '';
+            }
+            
+            // Find current job (ends with "nay" or "hiện tại")
+            const currentJob = cvInfo.experience.find(exp => exp.isCurrent === true);
+            
+            if (currentJob) {
+                const position = currentJob.description.split('-')[0]?.trim() || '';
+                log(`Current position found: "${position}"`, 'success');
+                return position;
+            } else {
+                log('No current position found (all jobs ended)', 'warning');
+                return '';
+            }
+        }
+        
+        function guessExperience(cvInfo) {
+            log('=== FORMATTING EXPERIENCE ===', 'info');
+            
+            if (!Array.isArray(cvInfo.experience) || cvInfo.experience.length === 0) {
+                log('No experience data found', 'warning');
+                return '';
+            }
+            
+            const formatted = cvInfo.experience.map(exp => {
+                return `${exp.timeRange}: ${exp.description}`;
+            }).join('\n');
+            
+            log(`Formatted ${cvInfo.experience.length} experience entries`, 'success');
+            return formatted;
+        }
+        
+        function guessAppliedPosition(cvInfo) {
+            log('=== EXTRACTING APPLIED POSITION ===', 'info');
+            
+            const text = cvInfo.rawText || '';
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            
+            const positions = [];
+            let inAppliedSection = false;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Find "VỊ TRÍ ỨNG TUYỂN" section
+                if (/vị\s*trí\s*ứng\s*tuyển/i.test(line)) {
+                    log(`Found applied position section at line ${i}: "${line}"`, 'success');
+                    inAppliedSection = true;
+                    continue;
+                }
+                
+                if (inAppliedSection) {
+                    // Find numbered positions (1. Marketing 2. HR)
+                    const numberedMatch = line.match(/^(\d+)\.\s*(.+)$/);
+                    if (numberedMatch) {
+                        positions.push(`${numberedMatch[1]}. ${numberedMatch[2].trim()}`);
+                        log(`Found position: ${numberedMatch[1]}. ${numberedMatch[2].trim()}`, 'success');
+                    } else if (line.length > 2) {
+                        positions.push(line);
+                        log(`Found position: ${line}`, 'success');
+                    }
+                    
+                    // Stop at next section
+                    if (/^(thông tin|skills|education)/i.test(line)) {
+                        break;
+                    }
+                }
+            }
+            
+            const result = positions.join(' ');
+            log(`Applied positions result: "${result}"`, result ? 'success' : 'warning');
+            return result;
+        }
+        
+        function analyzeCVContent(text) {
+            log('Starting CV analysis...', 'info');
+            
+            const cvInfo = {
+                personal: extractPersonalInfo(text),
+                contact: extractContactInfo(text),
+                education: extractEducation(text),
+                experience: extractExperience(text),
+                rawText: text
+            };
+            
+            // Generate table row
+            const tableRow = {
+                name: cvInfo.personal.name || '',
+                email: cvInfo.contact.email || '',
+                phone: cvInfo.contact.phone || '',
+                dob: cvInfo.personal.dateOfBirth || '',
+                gender: cvInfo.personal.gender || '',
+                education: cvInfo.education.length > 0 ? cvInfo.education[0].level : '',
+                currentPosition: guessCurrentPosition(cvInfo),
+                experience: guessExperience(cvInfo),
+                appliedPosition: guessAppliedPosition(cvInfo)
+            };
+            
+            return { cvInfo, tableRow };
+        }
+        
+        function displayResults(analysis) {
+            const { cvInfo, tableRow } = analysis;
+            
+            // Create results table
+            const table = `
+                <div class="result-table">
+                    <h3>📊 Extraction Results</h3>
+                    <table>
+                        <tr><th>Field</th><th>Value</th><th>Status</th></tr>
+                        <tr><td>Name</td><td>${tableRow.name}</td><td class="${tableRow.name ? 'success' : 'error'}">${tableRow.name ? '✓' : '✗'}</td></tr>
+                        <tr><td>Email</td><td>${tableRow.email}</td><td class="${tableRow.email ? 'success' : 'error'}">${tableRow.email ? '✓' : '✗'}</td></tr>
+                        <tr><td>Phone</td><td>${tableRow.phone}</td><td class="${tableRow.phone ? 'success' : 'error'}">${tableRow.phone ? '✓' : '✗'}</td></tr>
+                        <tr><td>Date of Birth</td><td>${tableRow.dob}</td><td class="${tableRow.dob ? 'success' : 'error'}">${tableRow.dob ? '✓' : '✗'}</td></tr>
+                        <tr><td>Gender</td><td>${tableRow.gender}</td><td class="${tableRow.gender ? 'success' : 'error'}">${tableRow.gender ? '✓' : '✗'}</td></tr>
+                        <tr><td>Education</td><td>${tableRow.education}</td><td class="${tableRow.education ? 'success' : 'error'}">${tableRow.education ? '✓' : '✗'}</td></tr>
+                        <tr><td>Current Position</td><td>${tableRow.currentPosition}</td><td class="${tableRow.currentPosition ? 'success' : 'warning'}">${tableRow.currentPosition ? '✓' : '?'}</td></tr>
+                        <tr><td>Experience</td><td style="max-width:200px; word-wrap:break-word;">${tableRow.experience.substring(0, 100)}${tableRow.experience.length > 100 ? '...' : ''}</td><td class="${tableRow.experience ? 'success' : 'error'}">${tableRow.experience ? '✓' : '✗'}</td></tr>
+                        <tr><td>Applied Position</td><td>${tableRow.appliedPosition}</td><td class="${tableRow.appliedPosition ? 'success' : 'warning'}">${tableRow.appliedPosition ? '✓' : '?'}</td></tr>
+                    </table>
+                </div>
+            `;
+            
+            results.innerHTML = table;
+            
+            // Create detailed debug info
+            createDebugSection('Raw Personal Info', JSON.stringify(cvInfo.personal, null, 2));
+            createDebugSection('Raw Contact Info', JSON.stringify(cvInfo.contact, null, 2));
+            createDebugSection('Raw Education Info', JSON.stringify(cvInfo.education, null, 2));
+            createDebugSection('Raw Experience Info', JSON.stringify(cvInfo.experience, null, 2));
+        }
+        
+        // Auto-load and test with sample file
+        async function autoTest() {
+            log('🚀 Starting automatic debug test...', 'info');
+            
+            try {
+                // Try to fetch the sample PDF file
+                const response = await fetch('./Phạm Yến Linh.pdf');
+                if (response.ok) {
+                    log('📄 Sample PDF file found, processing...', 'success');
+                    
+                    const arrayBuffer = await response.arrayBuffer();
+                    
+                    // Initialize PDF.js
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    
+                    // Extract text from PDF
+                    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                    let fullText = '';
+                    
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items
+                            .map(item => item.str)
+                            .join(' ');
+                        fullText += pageText + '\n';
+                    }
+                    
+                    log(`✓ Extracted ${fullText.length} characters from PDF`, 'success');
+                    
+                    // Analyze content
+                    const analysis = analyzeCVContent(fullText);
+                    displayResults(analysis);
+                    
+                    log('🎉 Auto debug completed!', 'success');
+                    
+                } else {
+                    log('❌ Sample PDF file not found, cannot auto-test', 'error');
+                    
+                    // Create file input for manual testing
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.pdf,.docx';
+                    fileInput.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            log(`📁 Processing file: ${file.name}`, 'info');
+                            // Process file manually
+                        }
+                    };
+                    
+                    const uploadDiv = document.createElement('div');
+                    uploadDiv.innerHTML = '<h3>Manual File Upload</h3>';
+                    uploadDiv.appendChild(fileInput);
+                    debugOutput.appendChild(uploadDiv);
+                }
+                
+            } catch (error) {
+                log(`❌ Error during auto test: ${error.message}`, 'error');
+                console.error('Auto test error:', error);
+            }
+        }
+        
+        // Start auto test when page loads
+        window.addEventListener('load', autoTest);
+        
+    </script>
+</body>
+</html>
