@@ -1,0 +1,21 @@
+Flask==2.3.3
+flask-cors==4.0.0
+python-docx2txt==0.8
+PyPDF2==3.0.1
+spacy==3.7.2
+textract==1.6.5
+easyocr==1.7.0
+opencv-python==4.8.1.78
+numpy==1.24.3
+Pillow==10.0.1
+Werkzeug==2.3.7
+
+# Optional: for Vietnamese NLP
+# underthesea==6.7.0
+
+# For advanced OCR
+# pytesseract==0.3.10
+
+# For database (if needed)
+# SQLAlchemy==2.0.21
+# pymongo==4.5.0
