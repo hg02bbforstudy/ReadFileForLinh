@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Test - CV Reader</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .loading { background: #fff3cd; border-color: #ffeaa7; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Backend API Tester</h1>
+        <p>Test các endpoint của Python backend sau khi deploy</p>
+
+        <div>
+            <label>Backend URL:</label>
+            <input type="text" id="backendUrl" placeholder="https://your-app.railway.app" value="http://localhost:5000">
+            <button onclick="updateUrl()">Update URL</button>
+        </div>
+
+        <div id="healthTest" class="test-section">
+            <h3>🔍 Health Check</h3>
+            <button onclick="testHealth()">Test Health Endpoint</button>
+            <div id="healthResult"></div>
+        </div>
+
+        <div id="processTest" class="test-section">
+            <h3>📄 Process CV</h3>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.txt">
+            <button onclick="testProcessCV()">Test CV Processing</button>
+            <div id="processResult"></div>
+        </div>
+
+        <div id="verifyTest" class="test-section">
+            <h3>✅ Verify Field</h3>
+            <button onclick="testVerifyField()">Test Field Verification</button>
+            <div id="verifyResult"></div>
+        </div>
+
+        <div id="saveTest" class="test-section">
+            <h3>💾 Save CV</h3>
+            <button onclick="testSaveCV()">Test Save CV Data</button>
+            <div id="saveResult"></div>
+        </div>
+
+        <div id="overallResult" class="test-section">
+            <h3>📊 Overall Results</h3>
+            <div id="summary"></div>
+        </div>
+    </div>
+
+    <script>
+        let API_BASE_URL = 'http://localhost:5000';
+        let testResults = {
+            health: false,
+            process: false,
+            verify: false,
+            save: false
+        };
+
+        function updateUrl() {
+            const url = document.getElementById('backendUrl').value.trim();
+            if (url) {
+                API_BASE_URL = url.replace(/\/$/, ''); // Remove trailing slash
+                console.log('Updated API URL:', API_BASE_URL);
+                // Reset test results
+                testResults = { health: false, process: false, verify: false, save: false };
+                updateSummary();
+            }
+        }
+
+        async function testHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.innerHTML = '<div class="loading">🔄 Testing health endpoint...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Health check passed!<br>
+                            Status: ${data.status}<br>
+                            Timestamp: ${data.timestamp}
+                        </div>
+                    `;
+                    testResults.health = true;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Health check failed: ${error.message}<br>
+                        Make sure your backend is deployed and URL is correct.
+                    </div>
+                `;
+                testResults.health = false;
+            }
+            
+            updateSummary();
+        }
+
+        async function testProcessCV() {
+            const resultDiv = document.getElementById('processResult');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (!fileInput.files[0]) {
+                // Create sample text file for testing
+                const sampleCV = `
+NGUYỄN VĂN TEST
+
+Thông tin cá nhân:
+Email: test@example.com
+Điện thoại: 0987654321
+Ngày sinh: 15/05/1995
+Giới tính: Nam
+
+Học vấn: Đại học
+Trường: Đại học Bách Khoa Hà Nội
+Chuyên ngành: Công nghệ thông tin
+
+Vị trí ứng tuyển: Senior Developer
+Kinh nghiệm: 5 năm kinh nghiệm lập trình
+                `;
+                
+                const blob = new Blob([sampleCV], { type: 'text/plain' });
+                const formData = new FormData();
+                formData.append('file', blob, 'test-cv.txt');
+                
+                await processFile(formData, resultDiv);
+            } else {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                await processFile(formData, resultDiv);
+            }
+        }
+
+        async function processFile(formData, resultDiv) {
+            resultDiv.innerHTML = '<div class="loading">🔄 Processing CV file...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/process-cv`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const fieldsCount = Object.keys(data.fields).length;
+                    const extractedCount = Object.values(data.fields).filter(v => v).length;
+                    
+                    let fieldsHTML = '';
+                    Object.entries(data.fields).forEach(([key, value]) => {
+                        if (value) {
+                            const conf = Math.round((data.confidence[key] || 0) * 100);
+                            fieldsHTML += `<li>${key}: ${value} (${conf}%)</li>`;
+                        }
+                    });
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ CV processing successful!<br>
+                            Fields extracted: ${extractedCount}/${fieldsCount}<br>
+                            <ul>${fieldsHTML}</ul>
+                        </div>
+                    `;
+                    testResults.process = true;
+                } else {
+                    const error = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${error}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ CV processing failed: ${error.message}
+                    </div>
+                `;
+                testResults.process = false;
+            }
+            
+            updateSummary();
+        }
+
+        async function testVerifyField() {
+            const resultDiv = document.getElementById('verifyResult');
+            resultDiv.innerHTML = '<div class="loading">🔄 Testing field verification...</div>';
+
+            const testData = {
+                field: 'email',
+                value: 'test@example.com',
+                rawContent: 'Email: test@example.com'
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/verify-field`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Field verification successful!<br>
+                            Field: ${data.field}<br>
+                            Verified: ${data.verified}<br>
+                            Confidence: ${Math.round(data.confidence * 100)}%
+                        </div>
+                    `;
+                    testResults.verify = true;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Field verification failed: ${error.message}
+                    </div>
+                `;
+                testResults.verify = false;
+            }
+            
+            updateSummary();
+        }
+
+        async function testSaveCV() {
+            const resultDiv = document.getElementById('saveResult');
+            resultDiv.innerHTML = '<div class="loading">🔄 Testing CV data saving...</div>';
+
+            const testData = {
+                fields: {
+                    name: 'Test User',
+                    email: 'test@example.com',
+                    phone: '0123456789'
+                },
+                confidence: {
+                    name: 0.95,
+                    email: 0.9,
+                    phone: 0.85
+                }
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/save-cv`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ CV saving successful!<br>
+                            CV ID: ${data.cv_id}<br>
+                            Message: ${data.message}
+                        </div>
+                    `;
+                    testResults.save = true;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ CV saving failed: ${error.message}
+                    </div>
+                `;
+                testResults.save = false;
+            }
+            
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const summaryDiv = document.getElementById('summary');
+            const passed = Object.values(testResults).filter(r => r).length;
+            const total = Object.keys(testResults).length;
+            
+            let statusHTML = '<h4>Test Status:</h4><ul>';
+            Object.entries(testResults).forEach(([test, result]) => {
+                const icon = result ? '✅' : '❌';
+                statusHTML += `<li>${icon} ${test}: ${result ? 'PASSED' : 'PENDING'}</li>`;
+            });
+            statusHTML += '</ul>';
+            
+            const overallClass = passed === total ? 'success' : (passed > 0 ? 'loading' : 'error');
+            
+            summaryDiv.innerHTML = `
+                <div class="${overallClass}">
+                    <strong>Overall: ${passed}/${total} tests passed</strong><br>
+                    ${statusHTML}
+                    ${passed === total ? 
+                        '<p>🎉 All tests passed! Your backend is working correctly.</p>' : 
+                        '<p>Run individual tests to check API endpoints.</p>'
+                    }
+                </div>
+            `;
+        }
+
+        // Run health check on load
+        window.addEventListener('load', function() {
+            updateSummary();
+        });
+    </script>
+</body>
+</html>
