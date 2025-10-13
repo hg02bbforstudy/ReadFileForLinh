@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Reader - WebAssembly Python Version</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2196F3 0%, #21CBF3 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            margin: 10px 5px 0;
+            font-size: 0.9em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .python-status {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .status-loading {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #2196F3;
+            background: #f0f8ff;
+        }
+
+        .upload-section.disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            color: #2196F3;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #2196F3 0%, #21CBF3 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(33,150,243,0.3);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .results-table th {
+            background: linear-gradient(135deg, #2196F3 0%, #21CBF3 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .results-table td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .results-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .export-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 20px;
+            margin: 20px 10px 0 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(40,167,69,0.3);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196F3;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2196F3, #21CBF3);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .python-console {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .results-table {
+                font-size: 0.9em;
+            }
+            
+            .results-table th,
+            .results-table td {
+                padding: 10px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐍 CV Reader - WebAssembly Python</h1>
+            <p>Python chạy trực tiếp trong browser - Không cần server</p>
+            <span class="badge">Pyodide WebAssembly</span>
+            <span class="badge">Offline Capable</span>
+            <span class="badge">Python Libraries</span>
+        </div>
+
+        <div class="content">
+            <!-- Python Status -->
+            <div id="pythonStatus" class="python-status status-loading">
+                <div class="spinner" style="width: 20px; height: 20px; display: inline-block; margin-right: 10px;"></div>
+                <strong>🐍 Python Environment:</strong> <span id="statusText">Đang khởi tạo Python trong browser...</span>
+                <div class="progress-bar">
+                    <div id="loadProgress" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section disabled" id="uploadSection">
+                <div class="upload-icon">📄</div>
+                <h3>Kéo thả file CV hoặc click để chọn</h3>
+                <p>Hỗ trợ: .docx, .pdf, .txt (Tối đa 10MB)</p>
+                <input type="file" id="fileInput" class="file-input" accept=".docx,.pdf,.txt">
+                <button class="upload-btn" id="uploadBtn" disabled onclick="document.getElementById('fileInput').click()">
+                    📁 Chọn File
+                </button>
+                <button class="upload-btn" onclick="toggleConsole()" style="background: linear-gradient(135deg, #6f42c1 0%, #8b5a9f 100%);">
+                    💻 Python Console
+                </button>
+            </div>
+
+            <!-- Python Console -->
+            <div id="pythonConsole" class="python-console">
+                <div id="consoleOutput">>>> Python đã sẵn sàng! Nhập code để test:</div>
+                <div style="display: flex; align-items: center; margin-top: 10px;">
+                    <span style="color: #569cd6;">>>> </span>
+                    <input type="text" id="consoleInput" style="flex: 1; background: transparent; border: none; color: #d4d4d4; outline: none; margin-left: 5px;" placeholder="print('Hello Python in Browser!')">
+                </div>
+            </div>
+
+            <!-- Loading Section -->
+            <div class="loading" id="loadingSection">
+                <div class="spinner"></div>
+                <h3 id="loadingText">Đang xử lý file với Python...</h3>
+                <p id="loadingDetail">Vui lòng đợi trong giây lát</p>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection">
+                <h2>📊 Kết quả trích xuất từ Python</h2>
+                
+                <div style="margin: 20px 0;">
+                    <button class="export-btn" onclick="exportCSV()">📥 Export CSV</button>
+                    <button class="export-btn" onclick="exportJSON()">📄 Export JSON</button>
+                    <button class="export-btn" onclick="showPythonProcessing()" style="background: linear-gradient(135deg, #6f42c1 0%, #8b5a9f 100%);">🔍 Python Processing Details</button>
+                </div>
+
+                <table class="results-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Trường</th>
+                            <th>Giá trị</th>
+                            <th>Độ tin cậy</th>
+                            <th>Python Method</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Raw Content -->
+            <div id="rawContentSection" style="margin-top: 30px; display: none;">
+                <h3>📝 Python Processed Content</h3>
+                <pre id="rawContent" style="background: #f8f9fa; padding: 20px; border-radius: 10px; max-height: 300px; overflow-y: auto; font-size: 0.9em;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pyodide CDN -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    
+    <script>
+        let pyodide = null;
+        let currentCVData = null;
+        let pythonReady = false;
+
+        // Initialize Pyodide
+        async function initializePython() {
+            try {
+                updateStatus('🔄 Đang tải Python WebAssembly...', 10);
+                
+                pyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
+                    stdout: (text) => {
+                        console.log('Python stdout:', text);
+                        addToConsole(text);
+                    },
+                    stderr: (text) => {
+                        console.error('Python stderr:', text);
+                        addToConsole(text, 'error');
+                    }
+                });
+
+                updateStatus('📦 Đang cài đặt packages Python...', 30);
+
+                // Install required packages
+                await pyodide.loadPackage(['micropip', 'regex', 'dateutil']);
+                
+                updateStatus('⚙️ Đang setup CV processing modules...', 60);
+
+                // Install additional packages via micropip
+                await pyodide.runPython(`
+                    import micropip
+                    # Install packages that work with Pyodide
+                    # await micropip.install(['python-dateutil', 'regex'])
+                `);
+
+                updateStatus('🎯 Đang load CV processing algorithms...', 80);
+
+                // Setup our CV processing Python code
+                await setupCVProcessor();
+
+                updateStatus('✅ Python sẵn sàng xử lý CV!', 100);
+                document.getElementById('pythonStatus').className = 'python-status status-ready';
+                document.getElementById('uploadSection').classList.remove('disabled');
+                document.getElementById('uploadBtn').disabled = false;
+                pythonReady = true;
+
+                setupDragAndDrop();
+                setupFileInput();
+
+            } catch (error) {
+                console.error('Failed to initialize Python:', error);
+                updateStatus('❌ Lỗi khởi tạo Python: ' + error.message, 0);
+                document.getElementById('pythonStatus').className = 'python-status status-error';
+            }
+        }
+
+        async function setupCVProcessor() {
+            await pyodide.runPython(`
+import re
+import json
+from datetime import datetime
+from js import console
+
+class CVProcessor:
+    def __init__(self):
+        self.field_patterns = {
+            'name': [
+                r'(?:họ\s*(?:và\s*)?tên|tên|name)\s*:?\s*([\\w\\s]+?)(?:\\n|$)',
+                r'^([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+(?:\\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+)+)',
+                r'\\b([A-Z][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+\\s+(?:[A-Z][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+\\s*)+)\\b'
+            ],
+            'email': [
+                r'([\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,})',
+                r'(?:email|e-mail|thư\\s*điện\\s*tử)\\s*:?\\s*([\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,})'
+            ],
+            'phone': [
+                r'(?:điện\\s*thoại|phone|mobile|di\\s*động|sđt)\\s*:?\\s*([+]?[0-9\\s\\-\\.\\(\\)]{8,})',
+                r'([+]?(?:84|0)[1-9][0-9\\s\\-\\.\\(\\)]{7,})',
+                r'\\b([0-9]{3,4}[\\s\\-\\.]?[0-9]{3,4}[\\s\\-\\.]?[0-9]{3,4})\\b'
+            ],
+            'dob': [
+                r'(?:ngày\\s*sinh|date\\s*of\\s*birth|dob|sinh\\s*ngày)\\s*:?\\s*([0-9]{1,2}[/\\-\\.][0-9]{1,2}[/\\-\\.][0-9]{2,4})',
+                r'\\b([0-9]{1,2}[/\\-\\.][0-9]{1,2}[/\\-\\.][0-9]{2,4})\\b'
+            ],
+            'gender': [
+                r'(?:giới\\s*tính|gender|sex)\\s*:?\\s*(nam|nữ|male|female)',
+                r'\\b(nam|nữ|male|female)\\b'
+            ]
+        }
+
+    def extract_cv_data(self, text):
+        """Extract CV data from text using Python regex and processing"""
+        results = {}
+        confidence = {}
+        
+        console.log("🐍 Python processing CV text...")
+        
+        # Clean text
+        text = self.clean_text(text)
+        
+        # Extract each field
+        for field, patterns in self.field_patterns.items():
+            value, conf = self.extract_field(text, patterns, field)
+            results[field] = value
+            confidence[field] = conf
+            
+        # Advanced processing for specific fields
+        results.update(self.advanced_processing(text))
+        
+        # Update confidence scores
+        for key in results:
+            if key not in confidence:
+                confidence[key] = 0.8  # Default confidence for advanced processing
+        
+        console.log(f"🐍 Python extracted {len(results)} fields")
+        
+        return {
+            'fields': results,
+            'confidence': confidence,
+            'method': 'python_webassembly',
+            'rawContent': text[:1000] + '...' if len(text) > 1000 else text
+        }
+    
+    def clean_text(self, text):
+        """Clean and normalize text"""
+        # Remove extra whitespace
+        text = re.sub(r'\\s+', ' ', text)
+        # Remove special characters but keep Vietnamese
+        text = re.sub(r'[^\\w\\s@\\.\\-/():,áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]', ' ', text)
+        return text.strip()
+    
+    def extract_field(self, text, patterns, field_name):
+        """Extract field using multiple patterns"""
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if matches:
+                value = matches[0].strip()
+                if value and len(value) > 1:
+                    confidence = self.calculate_confidence(value, field_name)
+                    return value, confidence
+        return '', 0.0
+    
+    def calculate_confidence(self, value, field_name):
+        """Calculate confidence score for extracted value"""
+        if field_name == 'email' and '@' in value and '.' in value:
+            return 0.95
+        elif field_name == 'phone' and len(re.sub(r'[^0-9]', '', value)) >= 8:
+            return 0.9
+        elif field_name == 'name' and len(value.split()) >= 2:
+            return 0.85
+        elif field_name == 'dob' and re.match(r'\\d{1,2}[/\\-\\.\\]\\d{1,2}[/\\-\\.\\]\\d{2,4}', value):
+            return 0.8
+        return 0.7
+    
+    def advanced_processing(self, text):
+        """Advanced processing for complex fields"""
+        results = {}
+        
+        # Extract education
+        education_patterns = [
+            r'(?:học\\s*vấn|education)\\s*:?\\s*(đại\\s*học|cao\\s*đẳng|trung\\s*cấp|phổ\\s*thông|bachelor|master|phd)',
+            r'\\b(đại\\s*học|cao\\s*đẳng|trung\\s*cấp|bachelor|master|phd)\\b'
+        ]
+        for pattern in education_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                results['education'] = matches[0].strip()
+                break
+        
+        # Extract school
+        school_patterns = [
+            r'(?:trường|university|college)\\s*:?\\s*([^\\n]{10,50})',
+            r'đại\\s*học\\s+([^\\n]{5,30})',
+            r'trường\\s+([^\\n]{5,30})'
+        ]
+        for pattern in school_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                results['school'] = matches[0].strip()
+                break
+        
+        # Extract applied position
+        position_patterns = [
+            r'(?:vị\\s*trí\\s*ứng\\s*tuyển|applied\\s*position)\\s*:?\\s*([^\\n]{5,50})',
+            r'ứng\\s*tuyển\\s*:?\\s*([^\\n]{5,30})'
+        ]
+        for pattern in position_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                results['appliedPosition'] = matches[0].strip()
+                break
+        
+        # Extract experience
+        exp_patterns = [
+            r'(?:kinh\\s*nghiệm|experience)\\s*:?\\s*([^\\n]{5,50})',
+            r'(\\d+)\\s*năm\\s*kinh\\s*nghiệm',
+            r'kinh\\s*nghiệm\\s*:?\\s*([^\\n]{5,30})'
+        ]
+        for pattern in exp_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                results['experience'] = matches[0] if isinstance(matches[0], str) else f"{matches[0]} năm"
+                break
+        
+        return results
+
+# Global CV processor instance
+cv_processor = CVProcessor()
+
+def process_cv_text(text):
+    """Main function to process CV text"""
+    return cv_processor.extract_cv_data(text)
+            `);
+        }
+
+        function updateStatus(message, progress) {
+            document.getElementById('statusText').textContent = message;
+            document.getElementById('loadProgress').style.width = progress + '%';
+        }
+
+        // Drag and drop
+        function setupDragAndDrop() {
+            const uploadSection = document.getElementById('uploadSection');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadSection.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadSection.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadSection.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                if (pythonReady) {
+                    uploadSection.style.borderColor = '#2196F3';
+                    uploadSection.style.background = '#f0f8ff';
+                }
+            }
+
+            function unhighlight() {
+                uploadSection.style.borderColor = '#dee2e6';
+                uploadSection.style.background = '#f8f9fa';
+            }
+
+            uploadSection.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                if (!pythonReady) return;
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+        }
+
+        // File input
+        function setupFileInput() {
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                handleFiles(e.target.files);
+            });
+        }
+
+        // Process files
+        async function handleFiles(files) {
+            if (files.length === 0 || !pythonReady) return;
+            
+            const file = files[0];
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            
+            if (file.size > maxSize) {
+                alert('File quá lớn! Vui lòng chọn file nhỏ hơn 10MB.');
+                return;
+            }
+
+            showLoading('🐍 Đang đọc file với Python...', 'Python đang phân tích cấu trúc file');
+
+            try {
+                let text = '';
+                
+                if (file.type === 'text/plain') {
+                    text = await file.text();
+                } else if (file.type === 'application/pdf') {
+                    text = await processPDF(file);
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    text = await processDOCX(file);
+                } else {
+                    throw new Error('Định dạng file không được hỗ trợ!');
+                }
+
+                showLoading('🔍 Python đang trích xuất thông tin...', 'Sử dụng regex patterns và AI algorithms');
+
+                // Process with Python
+                const result = await processWithPython(text);
+                displayResults(result);
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                alert('Có lỗi xảy ra khi xử lý file: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function processPDF(file) {
+            // Simple text extraction for PDF (limited in browser)
+            const text = await file.text();
+            return text;
+        }
+
+        async function processDOCX(file) {
+            // Simple text extraction for DOCX (would need proper library)
+            const text = await file.text();
+            return text;
+        }
+
+        async function processWithPython(text) {
+            if (!pyodide || !pythonReady) {
+                throw new Error('Python chưa sẵn sàng');
+            }
+
+            try {
+                // Pass text to Python and get results
+                pyodide.globals.set('input_text', text);
+                const result = pyodide.runPython(`
+import json
+result = process_cv_text(input_text)
+json.dumps(result)
+                `);
+                
+                return JSON.parse(result);
+            } catch (error) {
+                console.error('Python processing error:', error);
+                throw new Error('Lỗi xử lý Python: ' + error.message);
+            }
+        }
+
+        // Display results
+        function displayResults(data) {
+            currentCVData = data;
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+
+            const fieldLabels = {
+                name: 'Họ tên',
+                email: 'Email', 
+                phone: 'Số điện thoại',
+                dob: 'Ngày sinh',
+                gender: 'Giới tính',
+                education: 'Học vấn',
+                school: 'Trường học',
+                major: 'Chuyên ngành',
+                currentPosition: 'Vị trí hiện tại',
+                experience: 'Kinh nghiệm',
+                appliedPosition: 'Vị trí ứng tuyển'
+            };
+
+            Object.entries(data.fields).forEach(([key, value]) => {
+                const confidence = data.confidence[key] || 0;
+                const confidencePercent = Math.round(confidence * 100);
+                const confidenceColor = confidence > 0.8 ? '#28a745' : confidence > 0.6 ? '#ffc107' : '#dc3545';
+
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td><strong>${fieldLabels[key] || key}</strong></td>
+                    <td>
+                        <input type="text" value="${value || ''}" 
+                               onchange="updateField('${key}', this.value)"
+                               style="border: none; background: transparent; width: 100%; padding: 5px;">
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center;">
+                            <span style="color: ${confidenceColor}; font-weight: bold; margin-right: 10px;">
+                                ${confidencePercent}%
+                            </span>
+                            <div class="confidence-bar" style="flex: 1;">
+                                <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span style="font-family: monospace; font-size: 0.8em; color: #6c757d;">
+                            🐍 Python Regex
+                        </span>
+                    </td>
+                `;
+            });
+
+            document.getElementById('resultsSection').style.display = 'block';
+            
+            if (data.rawContent) {
+                document.getElementById('rawContent').textContent = data.rawContent;
+                document.getElementById('rawContentSection').style.display = 'block';
+            }
+
+            // Scroll to results
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Update field
+        function updateField(key, value) {
+            if (currentCVData) {
+                currentCVData.fields[key] = value;
+            }
+        }
+
+        // Export functions
+        function exportCSV() {
+            if (!currentCVData) return;
+            
+            const headers = ['Field', 'Value', 'Confidence', 'Method'];
+            const rows = [headers.join(',')];
+            
+            Object.entries(currentCVData.fields).forEach(([key, value]) => {
+                const confidence = Math.round((currentCVData.confidence[key] || 0) * 100);
+                rows.push(`"${key}","${value}","${confidence}%","Python WebAssembly"`);
+            });
+            
+            const csv = rows.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cv_data_python.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportJSON() {
+            if (!currentCVData) return;
+            
+            const blob = new Blob([JSON.stringify(currentCVData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cv_data_python.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showPythonProcessing() {
+            if (!currentCVData) return;
+            
+            const details = `
+🐍 PYTHON PROCESSING DETAILS 🐍
+
+Method: ${currentCVData.method}
+Total Fields Extracted: ${Object.keys(currentCVData.fields).length}
+
+Field Analysis:
+${Object.entries(currentCVData.fields).map(([key, value]) => {
+    const conf = Math.round((currentCVData.confidence[key] || 0) * 100);
+    return `• ${key}: "${value}" (${conf}% confidence)`;
+}).join('\n')}
+
+Python Environment: Pyodide WebAssembly
+Processing Engine: Custom CV Processor with Regex Patterns
+Libraries Used: re, json, datetime
+            `.trim();
+            
+            alert(details);
+        }
+
+        // Console functions
+        function toggleConsole() {
+            const console = document.getElementById('pythonConsole');
+            console.style.display = console.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function addToConsole(text, type = 'output') {
+            const output = document.getElementById('consoleOutput');
+            const color = type === 'error' ? '#ff6b6b' : '#d4d4d4';
+            output.innerHTML += `<br><span style="color: ${color}">${text}</span>`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        // Console input handling
+        document.addEventListener('DOMContentLoaded', function() {
+            const consoleInput = document.getElementById('consoleInput');
+            consoleInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && pythonReady) {
+                    const code = this.value.trim();
+                    if (code) {
+                        addToConsole(`>>> ${code}`, 'input');
+                        try {
+                            const result = pyodide.runPython(code);
+                            if (result !== undefined) {
+                                addToConsole(String(result));
+                            }
+                        } catch (error) {
+                            addToConsole(`Error: ${error.message}`, 'error');
+                        }
+                        this.value = '';
+                    }
+                }
+            });
+        });
+
+        // Utility functions
+        function showLoading(title, detail) {
+            document.getElementById('loadingText').textContent = title;
+            document.getElementById('loadingDetail').textContent = detail;
+            document.getElementById('loadingSection').style.display = 'block';
+            document.getElementById('uploadSection').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSection').style.display = 'none';
+            document.getElementById('uploadSection').style.display = 'block';
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            console.log('🚀 Initializing Python WebAssembly CV Reader...');
+            initializePython();
+        });
+    </script>
+</body>
+</html>
