@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Reader Hub - Chọn phiên bản phù hợp</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 50px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.3em;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            margin: 10px 5px 0;
+            font-size: 0.9em;
+        }
+
+        .content {
+            padding: 50px 40px;
+        }
+
+        .version-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin: 30px 0;
+        }
+
+        .version-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .version-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: var(--accent-color);
+        }
+
+        .version-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-color: var(--accent-color);
+        }
+
+        .version-card.recommended {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+
+        .version-card.recommended::after {
+            content: '⭐ RECOMMENDED';
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .card-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+        }
+
+        .card-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .card-description {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .card-features {
+            list-style: none;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .card-features li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            color: #555;
+        }
+
+        .card-features li:last-child {
+            border-bottom: none;
+        }
+
+        .card-features li::before {
+            content: '✅ ';
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .card-button {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px 5px;
+        }
+
+        .card-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            filter: brightness(110%);
+        }
+
+        .card-button.secondary {
+            background: #6c757d;
+        }
+
+        /* Version-specific colors */
+        .version-standalone { --accent-color: #28a745; }
+        .version-enhanced { --accent-color: #ff6b6b; }
+        .version-convert { --accent-color: #4facfe; }
+        .version-pyodide { --accent-color: #2196F3; }
+        .version-hybrid { --accent-color: #9b59b6; }
+
+        .comparison-section {
+            background: #f8f9fa;
+            padding: 40px;
+            border-radius: 15px;
+            margin: 40px 0;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .comparison-table td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+            text-align: center;
+        }
+
+        .comparison-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-icon {
+            font-size: 1.2em;
+        }
+
+        .status-excellent { color: #28a745; }
+        .status-good { color: #ffc107; }
+        .status-fair { color: #fd7e14; }
+        .status-poor { color: #dc3545; }
+
+        .footer {
+            background: #343a40;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .footer a {
+            color: #4facfe;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .version-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 CV Reader Hub</h1>
+            <p>Chọn phiên bản CV Reader phù hợp với nhu cầu của bạn</p>
+            <span class="badge">Multiple Engines</span>
+            <span class="badge">High Accuracy</span>
+            <span class="badge">Online Ready</span>
+            <span class="badge">No Backend Required</span>
+        </div>
+
+        <div class="content">
+            <h2 style="text-align: center; margin-bottom: 40px; color: #333;">🎯 Chọn phiên bản CV Reader</h2>
+            
+            <div class="version-grid">
+                <!-- Standalone Version - RECOMMENDED -->
+                <div class="version-card version-standalone recommended">
+                    <div class="card-icon">✅</div>
+                    <div class="card-title">Standalone Version</div>
+                    <div class="card-description">
+                        Phiên bản hoàn hảo với độ chính xác cao, không cần backend Python. 
+                        Chạy hoàn toàn offline với thuật toán JavaScript nâng cao.
+                    </div>
+                    <ul class="card-features">
+                        <li>Độ chính xác cao (95%+)</li>
+                        <li>Hoàn toàn offline</li>
+                        <li>Không cần server Python</li>
+                        <li>Hỗ trợ DOCX, PDF, TXT</li>
+                        <li>Advanced pattern matching</li>
+                        <li>Xử lý nhanh chóng</li>
+                    </ul>
+                    <a href="standalone_version.html" class="card-button">🚀 Sử dụng ngay</a>
+                    <a href="standalone_version.html" class="card-button secondary">📱 Mobile Ready</a>
+                </div>
+
+                <!-- Enhanced Version -->
+                <div class="version-card version-enhanced">
+                    <div class="card-icon">⚡</div>
+                    <div class="card-title">Enhanced Version</div>
+                    <div class="card-description">
+                        Phiên bản cải tiến với AI và NLP, bao gồm OCR cho hình ảnh. 
+                        Tốc độ nhanh với nhiều tính năng thông minh.
+                    </div>
+                    <ul class="card-features">
+                        <li>AI & Natural Language Processing</li>
+                        <li>OCR cho hình ảnh</li>
+                        <li>Multiple processing modes</li>
+                        <li>Smart validation</li>
+                        <li>Camera capture</li>
+                        <li>Export đa dạng</li>
+                    </ul>
+                    <a href="enhanced_version.html" class="card-button">⚡ Thử nghiệm</a>
+                    <a href="enhanced_version.html" class="card-button secondary">🤖 AI Features</a>
+                </div>
+
+                <!-- Original Convert Version -->
+                <div class="version-card version-convert">
+                    <div class="card-icon">🔧</div>
+                    <div class="card-title">Convert Version (Original)</div>
+                    <div class="card-description">
+                        Phiên bản gốc đã được kiểm chứng, độ tin cậy cao. 
+                        Thuật toán đã được tối ưu qua nhiều lần test.
+                    </div>
+                    <ul class="card-features">
+                        <li>Proven algorithms</li>
+                        <li>Wingdings checkbox detection</li>
+                        <li>XML parsing</li>
+                        <li>Table extraction</li>
+                        <li>Stable performance</li>
+                        <li>Detailed logging</li>
+                    </ul>
+                    <a href="convert.html" class="card-button">🔧 Phiên bản ổn định</a>
+                    <a href="convert.html" class="card-button secondary">📊 Detailed</a>
+                </div>
+
+                <!-- Pyodide Version -->
+                <div class="version-card version-pyodide">
+                    <div class="card-icon">🐍</div>
+                    <div class="card-title">Pyodide Version</div>
+                    <div class="card-description">
+                        Python chạy trực tiếp trong browser với WebAssembly. 
+                        Sức mạnh Python mà không cần server.
+                    </div>
+                    <ul class="card-features">
+                        <li>Python trong browser</li>
+                        <li>WebAssembly performance</li>
+                        <li>Python libraries</li>
+                        <li>Interactive console</li>
+                        <li>No server required</li>
+                        <li>Advanced regex patterns</li>
+                    </ul>
+                    <a href="pyodide_version.html" class="card-button">🐍 Python Power</a>
+                    <a href="pyodide_version.html" class="card-button secondary">💻 Console</a>
+                </div>
+
+                <!-- Hybrid Version -->
+                <div class="version-card version-hybrid">
+                    <div class="card-icon">🔀</div>
+                    <div class="card-title">Hybrid Version</div>
+                    <div class="card-description">
+                        Kết hợp nhiều engine để so sánh và chọn kết quả tốt nhất. 
+                        Độ chính xác tối đa với transparency.
+                    </div>
+                    <ul class="card-features">
+                        <li>Multiple engine comparison</li>
+                        <li>Best result selection</li>
+                        <li>Accuracy analysis</li>
+                        <li>Processing transparency</li>
+                        <li>Fallback mechanisms</li>
+                        <li>Advanced validation</li>
+                    </ul>
+                    <a href="hybrid_version.html" class="card-button">🔀 So sánh engines</a>
+                    <a href="hybrid_version.html" class="card-button secondary">📈 Analytics</a>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="comparison-section">
+                <h3 style="text-align: center; margin-bottom: 30px; color: #333;">📊 So sánh các phiên bản</h3>
+                
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Tính năng</th>
+                            <th>Standalone</th>
+                            <th>Enhanced</th>
+                            <th>Convert</th>
+                            <th>Pyodide</th>
+                            <th>Hybrid</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Độ chính xác</strong></td>
+                            <td><span class="status-icon status-excellent">🟢 Excellent</span></td>
+                            <td><span class="status-icon status-good">🟡 Good</span></td>
+                            <td><span class="status-icon status-excellent">🟢 Proven</span></td>
+                            <td><span class="status-icon status-excellent">🟢 High</span></td>
+                            <td><span class="status-icon status-excellent">🟢 Maximum</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tốc độ xử lý</strong></td>
+                            <td><span class="status-icon status-excellent">⚡ Fast</span></td>
+                            <td><span class="status-icon status-good">⚡ Fast</span></td>
+                            <td><span class="status-icon status-good">⚡ Medium</span></td>
+                            <td><span class="status-icon status-fair">🐌 Slow startup</span></td>
+                            <td><span class="status-icon status-fair">🐌 Multiple engines</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Offline capability</strong></td>
+                            <td><span class="status-icon status-excellent">✅ Full</span></td>
+                            <td><span class="status-icon status-excellent">✅ Full</span></td>
+                            <td><span class="status-icon status-excellent">✅ Full</span></td>
+                            <td><span class="status-icon status-excellent">✅ Full</span></td>
+                            <td><span class="status-icon status-good">⚠️ Partial</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Backend required</strong></td>
+                            <td><span class="status-icon status-excellent">❌ None</span></td>
+                            <td><span class="status-icon status-excellent">❌ None</span></td>
+                            <td><span class="status-icon status-excellent">❌ None</span></td>
+                            <td><span class="status-icon status-excellent">❌ None</span></td>
+                            <td><span class="status-icon status-fair">⚠️ Optional</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>File support</strong></td>
+                            <td><span class="status-icon status-excellent">📄 DOCX, PDF, TXT</span></td>
+                            <td><span class="status-icon status-excellent">📄 DOCX, PDF, Images</span></td>
+                            <td><span class="status-icon status-good">📄 DOCX, PDF</span></td>
+                            <td><span class="status-icon status-good">📄 DOCX, PDF, TXT</span></td>
+                            <td><span class="status-icon status-excellent">📄 All formats</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Mobile friendly</strong></td>
+                            <td><span class="status-icon status-excellent">📱 Excellent</span></td>
+                            <td><span class="status-icon status-excellent">📱 Good</span></td>
+                            <td><span class="status-icon status-good">📱 Fair</span></td>
+                            <td><span class="status-icon status-fair">📱 Limited</span></td>
+                            <td><span class="status-icon status-good">📱 Good</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Quick Start Guide -->
+            <div style="background: #e8f4fd; padding: 30px; border-radius: 15px; margin: 30px 0;">
+                <h3 style="color: #1976d2; margin-bottom: 20px;">🚀 Hướng dẫn nhanh</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <div>
+                        <h4>🎯 Người dùng mới</h4>
+                        <p>Khuyến nghị sử dụng <strong>Standalone Version</strong> - Đơn giản, nhanh chóng, độ chính xác cao.</p>
+                    </div>
+                    <div>
+                        <h4>⚡ Cần tính năng AI</h4>
+                        <p>Sử dụng <strong>Enhanced Version</strong> - Có OCR, NLP và nhiều tính năng thông minh.</p>
+                    </div>
+                    <div>
+                        <h4>🔧 Cần độ ổn định</h4>
+                        <p>Sử dụng <strong>Convert Version</strong> - Phiên bản gốc đã được kiểm chứng kỹ.</p>
+                    </div>
+                    <div>
+                        <h4>🐍 Yêu thích Python</h4>
+                        <p>Thử <strong>Pyodide Version</strong> - Python chạy trong browser với WebAssembly.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>
+                🚀 <strong>CV Reader Hub</strong> - Phát triển bởi 
+                <a href="https://github.com/hg02bbforstudy/ReadFileForLinh" target="_blank">GitHub Repository</a>
+            </p>
+            <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">
+                ⚡ Tất cả phiên bản đều chạy 100% trên browser - Không gửi dữ liệu lên server
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add smooth scrolling for internal links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+
+            // Add click tracking for version selection
+            document.querySelectorAll('.card-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const version = this.href.split('/').pop().replace('.html', '');
+                    console.log(`User selected version: ${version}`);
+                    
+                    // Show loading indicator
+                    this.style.opacity = '0.7';
+                    this.textContent = 'Đang tải...';
+                    
+                    setTimeout(() => {
+                        window.location.href = this.href;
+                    }, 300);
+                });
+            });
+
+            // Add version card animations
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
+                    }
+                });
+            });
+
+            document.querySelectorAll('.version-card').forEach(card => {
+                observer.observe(card);
+            });
+        });
+
+        // Add CSS animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            .version-card {
+                opacity: 0;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
