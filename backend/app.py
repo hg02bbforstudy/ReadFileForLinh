@@ -19,7 +19,7 @@ except ImportError as e:
     print(f"Warning: Some libraries not available: {e}")
 
 app = Flask(__name__)
-CORS(app, origins=['https://hg02bbforstudy.github.io', 'http://localhost:3000', 'http://127.0.0.1:5500'])  # Allow specific origins
+CORS(app, origins="*", methods=['GET', 'POST', 'OPTIONS'], allow_headers=['Content-Type', 'Authorization'])  # Allow all origins for testing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,9 +28,10 @@ logger = logging.getLogger(__name__)
 # Add CORS headers manually for all responses
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'https://hg02bbforstudy.github.io')
+    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'false')
     return response
 
 class SimpleCVProcessor:
