@@ -19,11 +19,19 @@ except ImportError as e:
     print(f"Warning: Some libraries not available: {e}")
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests
+CORS(app, origins=['https://hg02bbforstudy.github.io', 'http://localhost:3000', 'http://127.0.0.1:5500'])  # Allow specific origins
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Add CORS headers manually for all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', 'https://hg02bbforstudy.github.io')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 class SimpleCVProcessor:
     def __init__(self):
@@ -273,6 +281,15 @@ def process_image():
     except Exception as e:
         logger.error(f"Error in process_image endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/health', methods=['OPTIONS'])
+@app.route('/process-cv', methods=['OPTIONS'])
+@app.route('/verify-field', methods=['OPTIONS'])
+@app.route('/save-cv', methods=['OPTIONS'])
+@app.route('/process-image', methods=['OPTIONS'])
+def handle_preflight():
+    """Handle CORS preflight requests"""
+    return '', 200
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
