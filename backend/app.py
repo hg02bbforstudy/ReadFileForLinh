@@ -26,7 +26,8 @@ class SimpleCVProcessor:
         self.field_patterns = {
             'name': [
                 r'(?:họ\s*(?:và\s*)?tên|tên|name)\s*:?\s*([^\n\r]{2,50})',
-                r'^([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+(?:\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]*){1,3})'
+                r'^([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+(?:\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]*){1,3})',
+                r'\b([A-Z][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+\s+(?:[A-Z][a-záàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ]+\s*)+)\b'
             ],
             'email': [
                 r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
@@ -34,10 +35,45 @@ class SimpleCVProcessor:
             ],
             'phone': [
                 r'(?:điện\s*thoại|phone|mobile|di\s*động|sđt)\s*:?\s*([+]?[0-9\s\-\.()]{8,})',
-                r'([+]?(?:84|0)[1-9][0-9\s\-\.()]{7,})'
+                r'([+]?(?:84|0)[1-9][0-9\s\-\.()]{7,})',
+                r'\b([0-9]{3,4}[\s\-\.]?[0-9]{3,4}[\s\-\.]?[0-9]{3,4})\b'
+            ],
+            'dob': [
+                r'(?:ngày\s*sinh|date\s*of\s*birth|dob|sinh\s*ngày)\s*:?\s*([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})',
+                r'\b([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})\b'
+            ],
+            'gender': [
+                r'(?:giới\s*tính|gender|sex)\s*:?\s*(nam|nữ|male|female|m|f)',
+                r'\b(nam|nữ|male|female)\b'
+            ],
+            'education': [
+                r'(?:học\s*vấn|education|qualification|trình\s*độ)\s*:?\s*([^\n\r]{2,100})',
+                r'(?:bằng\s*cấp|degree)\s*:?\s*([^\n\r]{2,100})',
+                r'\b(đại\s*học|cao\s*đẳng|trung\s*cấp|thạc\s*sĩ|tiến\s*sĩ|bachelor|master|phd|diploma)\b'
+            ],
+            'school': [
+                r'(?:trường|school|university|college|học\s*tại)\s*:?\s*([^\n\r]{2,100})',
+                r'(?:đại\s*học|university)\s*([^\n\r]{2,100})',
+                r'(?:tốt\s*nghiệp\s*tại|graduated\s*from)\s*:?\s*([^\n\r]{2,100})'
+            ],
+            'major': [
+                r'(?:chuyên\s*ngành|major|field|ngành\s*học)\s*:?\s*([^\n\r]{2,100})',
+                r'(?:ngành\s*học|specialization)\s*:?\s*([^\n\r]{2,100})'
+            ],
+            'currentPosition': [
+                r'(?:vị\s*trí\s*hiện\s*tại|current\s*position|công\s*việc\s*hiện\s*tại)\s*:?\s*([^\n\r]{2,100})',
+                r'(?:làm\s*việc\s*tại|working\s*as)\s*:?\s*([^\n\r]{2,100})'
+            ],
+            'experience': [
+                r'(?:kinh\s*nghiệm|experience|số\s*năm\s*kinh\s*nghiệm)\s*:?\s*([^\n\r]{2,200})',
+                r'([0-9]+\s*(?:năm|year|tháng|month)?\s*(?:kinh\s*nghiệm|experience))',
+                r'(?:đã\s*làm\s*việc|worked\s*for)\s*([0-9]+\s*(?:năm|year))'
             ],
             'appliedPosition': [
-                r'(?:vị\s*trí\s*ứng\s*tuyển|position\s*applied)\s*:?\s*([^\n\r]{2,100})'
+                r'(?:vị\s*trí\s*ứng\s*tuyển|position\s*applied|ứng\s*tuyển\s*vị\s*trí)\s*([^\n\r]{2,100})',
+                r'(?:ứng\s*tuyển\s*vào\s*vị\s*trí|applying\s*for)\s*:?\s*([^\n\r]{2,100})',
+                r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:I\.\s*THÔNG\s*TIN|$)',
+                r'Vị\s*trí\s*ứng\s*tuyển[\s\S]*?Nơi\s*làm\s*việc([\s\S]*?)(?:I\.\s*THÔNG\s*TIN|$)'
             ]
         }
     
@@ -61,6 +97,10 @@ class SimpleCVProcessor:
             return ""
     
     def extract_field_value(self, text, field_name):
+        # Special handling for applied position
+        if field_name == 'appliedPosition':
+            return self.extract_applied_position(text)
+        
         patterns = self.field_patterns.get(field_name, [])
         for pattern in patterns:
             matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -69,6 +109,40 @@ class SimpleCVProcessor:
                 if value and len(value) > 1:
                     return value, 0.8
         return "", 0.0
+    
+    def extract_applied_position(self, text):
+        """Extract applied position from specific text section as requested"""
+        try:
+            # Method 1: Extract between "Vị trí ứng tuyển Nơi làm việc" and "I. THÔNG TIN BẢN THÂN"
+            pattern1 = r'vị\s*trí\s*ứng\s*tuyển\s*nơi\s*làm\s*việc([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|$)'
+            match1 = re.search(pattern1, text, re.IGNORECASE | re.MULTILINE)
+            
+            if match1:
+                content = match1.group(1).strip()
+                # Clean up the content
+                content = re.sub(r'\n+', ' ', content)
+                content = re.sub(r'\s+', ' ', content)
+                if len(content) > 5:
+                    return content[:200], 0.9
+            
+            # Method 2: Look for specific applied position patterns
+            patterns = [
+                r'(?:vị\s*trí\s*ứng\s*tuyển|applying\s*for)\s*:?\s*([^\n\r]{5,100})',
+                r'(?:ứng\s*tuyển\s*vị\s*trí|position\s*applied)\s*:?\s*([^\n\r]{5,100})'
+            ]
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
+                for match in matches:
+                    value = match.group(1).strip()
+                    if len(value) > 5:
+                        return value, 0.8
+            
+            return "", 0.0
+            
+        except Exception as e:
+            logger.error(f"Error extracting applied position: {e}")
+            return "", 0.0
     
     def process_cv(self, file_path, file_type):
         try:
@@ -149,6 +223,80 @@ def process_cv():
                 
     except Exception as e:
         logger.error(f"Error in process_cv endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/verify-field', methods=['POST', 'OPTIONS'])
+def verify_field():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        data = request.get_json()
+        field = data.get('field')
+        value = data.get('value')
+        raw_content = data.get('rawContent', '')
+        
+        # Simple verification - check if value appears in raw content
+        verified = value.lower() in raw_content.lower() if value and raw_content else False
+        
+        return jsonify({
+            'field': field,
+            'value': value,
+            'verified': verified,
+            'confidence': 0.8 if verified else 0.3
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in verify_field endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/save-cv', methods=['POST', 'OPTIONS'])
+def save_cv():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        data = request.get_json()
+        
+        # In a real application, save to database here
+        logger.info(f"CV data received for saving: {data.get('fields', {}).get('name', 'Unknown')}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'CV data saved successfully',
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in save_cv endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/process-image', methods=['POST', 'OPTIONS'])
+def process_image():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image uploaded'}), 400
+        
+        # For now, return a placeholder result (OCR would be added later)
+        return jsonify({
+            'fields': {
+                'name': 'Extracted from Image',
+                'email': 'image@example.com',
+                'phone': '0123456789'
+            },
+            'confidence': {
+                'name': 0.6,
+                'email': 0.5,
+                'phone': 0.5
+            },
+            'rawContent': 'Image processed with basic extraction...'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in process_image endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
