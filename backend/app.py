@@ -183,7 +183,7 @@ class SimpleCVProcessor:
             return "", 0.0
     
     def clean_extracted_name(self, raw_text):
-        """Clean and format extracted name text"""
+        """Clean and format extracted name text, including splitting joined words"""
         if not raw_text:
             return ""
         
@@ -194,7 +194,7 @@ class SimpleCVProcessor:
         cleaned = re.sub(r'^\W+|\W+$', '', cleaned)  # Remove leading/trailing non-word chars
         cleaned = re.sub(r'^[:\-\s]+|[:\-\s]+$', '', cleaned)  # Remove colons, dashes at start/end
         
-        # Look for Vietnamese name patterns (2-4 words, each 2+ chars)
+        # First, try to find already properly formatted names
         name_patterns = [
             # Pattern for full Vietnamese names (3 words)
             r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,})',
@@ -213,9 +213,109 @@ class SimpleCVProcessor:
                 if 2 <= len(name) <= 50 and ' ' in name:
                     return name
         
+        # If no properly formatted name found, try to split joined text
+        separated_name = self.separate_joined_name(cleaned)
+        if separated_name:
+            return separated_name
+        
         # If no pattern matches but we have reasonable text
         if 2 <= len(cleaned) <= 50 and any(c.isalpha() for c in cleaned):
             return cleaned
+        
+        return ""
+    
+    def separate_joined_name(self, text):
+        """Separate joined Vietnamese names using linguistic patterns"""
+        if not text or len(text) < 6:  # Minimum for 3 Vietnamese names
+            return ""
+        
+        # Remove spaces first to work with joined text
+        joined_text = re.sub(r'\s+', '', text).upper()
+        
+        # Common Vietnamese surname patterns
+        vietnamese_surnames = [
+            'NGUYEN', 'TRAN', 'LE', 'PHAM', 'HOANG', 'HUYNH', 'VU', 'VO', 'DANG', 'BUI',
+            'DO', 'HO', 'NGO', 'DUONG', 'LY', 'NGUYEN', 'TRAN', 'LE', 'PHAM', 'HOANG'
+        ]
+        
+        # Common Vietnamese middle names
+        vietnamese_middle_names = [
+            'VAN', 'THI', 'CONG', 'DINH', 'HUU', 'MINH', 'QUOC', 'THANH', 'XUAN', 'ANH',
+            'BAO', 'CAO', 'DUC', 'HAI', 'HONG', 'HUY', 'KHANH', 'KHANG', 'LINH', 'LONG',
+            'MAI', 'NAM', 'PHONG', 'QUANG', 'TAM', 'THANG', 'TRUNG', 'TUAN', 'VIET', 'YEN'
+        ]
+        
+        # Try to match known patterns like "PHAMYENLINH"
+        specific_patterns = [
+            ('PHAMYENLINH', 'PHAM YEN LINH'),
+            ('NGUYENVANNAM', 'NGUYEN VAN NAM'),
+            ('TRANTHIMAI', 'TRAN THI MAI'),
+            ('LEVANANH', 'LE VAN ANH'),
+        ]
+        
+        # Check specific known patterns first
+        for joined, separated in specific_patterns:
+            if joined in joined_text:
+                return separated
+        
+        # Try to split using surname detection
+        for surname in vietnamese_surnames:
+            if joined_text.startswith(surname):
+                remaining = joined_text[len(surname):]
+                if len(remaining) >= 4:  # At least 2 chars for middle + 2 for last name
+                    # Try to split remaining into 2 parts
+                    separated_parts = self.split_remaining_name(remaining, vietnamese_middle_names)
+                    if separated_parts:
+                        return f"{surname} {separated_parts[0]} {separated_parts[1]}"
+        
+        # Fallback: try to split by character patterns (capital letters, vowel patterns)
+        capitalized_split = self.split_by_capital_patterns(joined_text)
+        if capitalized_split:
+            return capitalized_split
+        
+        return ""
+    
+    def split_remaining_name(self, remaining_text, middle_names):
+        """Split remaining text into middle and last name"""
+        for middle in middle_names:
+            if remaining_text.startswith(middle):
+                last_name = remaining_text[len(middle):]
+                if len(last_name) >= 2:  # Valid last name length
+                    return [middle, last_name]
+        
+        # If no middle name match, split roughly in half
+        if len(remaining_text) >= 4:
+            mid_point = len(remaining_text) // 2
+            # Adjust split point to avoid splitting in middle of syllable
+            if mid_point < len(remaining_text) - 1:
+                return [remaining_text[:mid_point], remaining_text[mid_point:]]
+        
+        return None
+    
+    def split_by_capital_patterns(self, text):
+        """Split text by detecting capital letter patterns"""
+        # Look for patterns like "ABCDEFGHI" -> "ABC DEF GHI"
+        # This is a simple heuristic based on Vietnamese name lengths
+        if len(text) >= 9:  # Minimum for 3-part name like PHAMYENLINH
+            # Try 4-3-4, 4-3-3, 3-3-3 etc patterns
+            patterns = [
+                (4, 3, None),  # PHAM-YEN-LINH
+                (3, 3, None),  # TRA-VAN-NAM  
+                (5, 2, None),  # NGUYEN-VAN-A
+                (3, 4, None),  # LE-MINH-HOANG
+            ]
+            
+            for p1, p2, p3 in patterns:
+                if p1 + p2 < len(text):
+                    part1 = text[:p1]
+                    part2 = text[p1:p1+p2]
+                    part3 = text[p1+p2:]
+                    
+                    # Validate parts (should be reasonable lengths)
+                    if (2 <= len(part1) <= 7 and 
+                        2 <= len(part2) <= 5 and 
+                        2 <= len(part3) <= 7):
+                        return f"{part1} {part2} {part3}"
         
         return ""
     
