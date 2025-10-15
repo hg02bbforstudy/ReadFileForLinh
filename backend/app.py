@@ -320,60 +320,147 @@ class SimpleCVProcessor:
         return ""
     
     def extract_applied_position(self, text):
-        """Extract applied position to get '1. Marketing 2. Tổ chức nhân sự'"""
+        """Extract applied position from between 'Vị trí ứng tuyển Nơi làm việc' and 'THÔNG TIN BẢN THÂN'"""
         try:
-            # Method 1: Extract between "Vị trí ứng tuyển Nơi làm việc" and "I. THÔNG TIN BẢN THÂN"
-            pattern1 = r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*cá\s*nhân|$)'
-            match1 = re.search(pattern1, text, re.IGNORECASE | re.MULTILINE)
-            
-            if match1:
-                content = match1.group(1).strip()
-                # Clean and format the content to extract numbered list
-                content = re.sub(r'\n+', ' ', content)
-                content = re.sub(r'\s+', ' ', content)
-                
-                # Look for numbered items like "1. Marketing 2. Tổ chức nhân sự"
-                numbered_pattern = r'(\d+\.\s*[A-Za-zÀ-ỹ\s]+(?:\s+\d+\.\s*[A-Za-zÀ-ỹ\s]+)*)'
-                numbered_match = re.search(numbered_pattern, content)
-                if numbered_match:
-                    return numbered_match.group(1).strip(), 0.95
-                
-                # If no numbered list, return cleaned content
-                if len(content) > 5:
-                    return content[:200], 0.9
-            
-            # Method 2: Look for numbered list patterns anywhere
-            numbered_patterns = [
-                r'(1\.\s*Marketing\s*2\.\s*Tổ\s*chức\s*nhân\s*sự)',  # Specific pattern
-                r'(\d+\.\s*[A-Za-zÀ-ỹ\s]+\s*\d+\.\s*[A-Za-zÀ-ỹ\s]+)',  # General numbered list
-                r'(?:vị\s*trí\s*ứng\s*tuyển|ứng\s*tuyển)\s*:?\s*(\d+\.\s*[^\n\r]+)',
+            # Main extraction: Between markers with various format variations
+            section_patterns = [
+                # With diacritics
+                r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
+                # Without diacritics (encoding issues)
+                r'vi\s*tri\s*ung\s*tuyen[\s\S]*?noi\s*lam\s*viec([\s\S]*?)(?:thong\s*tin\s*ban\s*than|i\.\s*thong\s*tin|$)',
+                # Mixed case variations
+                r'Vi\s*tri\s*ung\s*tuyen[\s\S]*?Noi\s*lam\s*viec([\s\S]*?)(?:Thong\s*tin\s*ban\s*than|I\.\s*THONG\s*TIN|$)',
+                r'VI\s*TRI\s*UNG\s*TUYEN[\s\S]*?NOI\s*LAM\s*VIEC([\s\S]*?)(?:THONG\s*TIN\s*BAN\s*THAN|I\.\s*THONG\s*TIN|$)',
+                # Joined text variations  
+                r'vitriungtuyennoi?lamviec([\s\S]*?)(?:thongtinbanthan|$)',
+                r'VITRIUNGTUYENNOI?LAMVIEC([\s\S]*?)(?:THONGTINBANTHAN|$)'
             ]
             
-            for pattern in numbered_patterns:
-                matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
-                for match in matches:
-                    value = match.group(1).strip()
-                    if len(value) > 5:
-                        return value, 0.85
+            for pattern in section_patterns:
+                match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+                if match:
+                    raw_content = match.group(1).strip()
+                    
+                    if len(raw_content) > 3:
+                        # Process the extracted content
+                        processed_content = self.process_applied_position_content(raw_content)
+                        if processed_content:
+                            return processed_content, 0.95
             
-            # Method 3: Fallback to general patterns
-            general_patterns = [
-                r'(?:vị\s*trí\s*ứng\s*tuyển|applying\s*for)\s*:?\s*([^\n\r]{5,100})',
-                r'(?:ứng\s*tuyển\s*vị\s*trí|position\s*applied)\s*:?\s*([^\n\r]{5,100})'
+            # Fallback: Look for position patterns anywhere in text
+            fallback_patterns = [
+                r'(?:vị\s*trí\s*ứng\s*tuyển|ứng\s*tuyển\s*vị\s*trí)\s*:?\s*([^\n\r]{5,200})',
+                r'(?:applying\s*for|position\s*applied)\s*:?\s*([^\n\r]{5,200})'
             ]
             
-            for pattern in general_patterns:
+            for pattern in fallback_patterns:
                 matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
                 for match in matches:
-                    value = match.group(1).strip()
-                    if len(value) > 5:
-                        return value, 0.7
+                    content = match.group(1).strip()
+                    processed_content = self.process_applied_position_content(content)
+                    if processed_content:
+                        return processed_content, 0.7
             
             return "", 0.0
             
         except Exception as e:
             logger.error(f"Error extracting applied position: {e}")
             return "", 0.0
+    
+    def process_applied_position_content(self, raw_content):
+        """Process and clean applied position content, handle multiple positions and joined text"""
+        if not raw_content:
+            return ""
+        
+        # Clean basic formatting
+        content = re.sub(r'\n+', ' ', raw_content)
+        content = re.sub(r'\s+', ' ', content)
+        content = content.strip()
+        
+        # Remove unwanted characters at start/end
+        content = re.sub(r'^[:\-\s\.,;]+|[:\-\s\.,;]+$', '', content)
+        
+        # Try to separate joined text for common position names
+        content = self.separate_joined_positions(content)
+        
+        # Look for numbered list patterns first (highest priority)
+        numbered_patterns = [
+            # Specific patterns for common cases
+            r'(1\.\s*Marketing\s*2\.\s*Tổ\s*chức\s*nhân\s*sự)',
+            r'(1\.\s*Marketing\s*2\.\s*To\s*chuc\s*nhan\s*su)',
+            # General numbered patterns
+            r'(\d+\.\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\d+\.\s*[A-Za-zÀ-ỹ\s]{2,30})*)',
+            r'(\d+\)\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\d+\)\s*[A-Za-zÀ-ỹ\s]{2,30})*)',
+            # Dash separated
+            r'(\-\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\-\s*[A-Za-zÀ-ỹ\s]{2,30})*)'
+        ]
+        
+        for pattern in numbered_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                result = match.group(1).strip()
+                if len(result) > 5:
+                    return self.format_position_list(result)
+        
+        # Look for comma-separated positions
+        comma_patterns = [
+            r'([A-Za-zÀ-ỹ\s]{2,20}(?:\s*,\s*[A-Za-zÀ-ỹ\s]{2,20})+)',
+            r'([A-Za-zÀ-ỹ\s]{2,30}(?:\s+và\s+[A-Za-zÀ-ỹ\s]{2,30})+)'
+        ]
+        
+        for pattern in comma_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                result = match.group(1).strip()
+                if len(result) > 5:
+                    return self.format_position_list(result)
+        
+        # If no structured list found, return cleaned content if reasonable
+        if 3 <= len(content) <= 200 and any(c.isalpha() for c in content):
+            return content
+        
+        return ""
+    
+    def separate_joined_positions(self, text):
+        """Separate joined position names"""
+        # Common position name mappings
+        position_mappings = {
+            'MARKETING': 'Marketing',
+            'marketing': 'Marketing',  
+            'TOCHUCNHANSU': 'Tổ chức nhân sự',
+            'tochucnhansu': 'Tổ chức nhân sự',
+            'NHANSU': 'Nhân sự',
+            'nhansu': 'Nhân sự',
+            'KETOAN': 'Kế toán',
+            'ketoan': 'Kế toán',
+            'KIEMTOAN': 'Kiểm toán', 
+            'kiemtoan': 'Kiểm toán',
+            'SALE': 'Sale',
+            'KINH DOANH': 'Kinh doanh',
+            'kinhdoanh': 'Kinh doanh'
+        }
+        
+        result = text
+        for joined, separated in position_mappings.items():
+            result = re.sub(joined, separated, result, flags=re.IGNORECASE)
+        
+        # Try to separate patterns like "1.Marketing2.Tổchứcnhânsự"
+        result = re.sub(r'(\d+)\.(Marketing)(\d+)\.(Tổchứcnhânsự|Tochucnhansu)', 
+                       r'\1. \2 \3. Tổ chức nhân sự', result, flags=re.IGNORECASE)
+        
+        return result
+    
+    def format_position_list(self, text):
+        """Format the position list for consistent output"""
+        if not text:
+            return ""
+        
+        # Clean up spacing around numbers and punctuation
+        formatted = re.sub(r'(\d+)\s*[\.\)]\s*', r'\1. ', text)
+        formatted = re.sub(r'\s*,\s*', ', ', formatted)
+        formatted = re.sub(r'\s+', ' ', formatted)
+        
+        return formatted.strip()
     
     def process_cv(self, file_path, file_type):
         try:
