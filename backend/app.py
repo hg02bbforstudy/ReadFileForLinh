@@ -322,9 +322,11 @@ class SimpleCVProcessor:
     def extract_applied_position(self, text):
         """Extract applied position from between 'Vị trí ứng tuyển Nơi làm việc' and 'THÔNG TIN BẢN THÂN'"""
         try:
-            # Main extraction: Between markers with various format variations
+            # Main extraction: Between markers with table/column format support
             section_patterns = [
-                # With diacritics
+                # Table format: "Vị trí ứng tuyển\n\nNơi làm việc\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\nTHÔNG TIN BẢN THÂN"
+                r'vị\s*trí\s*ứng\s*tuyển\s*(?:\n|\r\n?)*\s*nơi\s*làm\s*việc([\s\S]*?)(?:thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
+                # Standard format with various spacing
                 r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
                 # Without diacritics (encoding issues)
                 r'vi\s*tri\s*ung\s*tuyen[\s\S]*?noi\s*lam\s*viec([\s\S]*?)(?:thong\s*tin\s*ban\s*than|i\.\s*thong\s*tin|$)',
@@ -372,7 +374,42 @@ class SimpleCVProcessor:
         if not raw_content:
             return ""
         
-        # Clean basic formatting
+        # First, extract individual position names from table/column format
+        # Pattern: "\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\n"
+        positions = []
+        
+        # Split by multiple newlines and filter valid position names
+        lines = re.split(r'\n+', raw_content)
+        for line in lines:
+            line = line.strip()
+            # Valid position: 2-50 characters, contains letters, not just punctuation/numbers
+            if 2 <= len(line) <= 50 and re.search(r'[A-Za-zÀ-ỹ]', line):
+                # Skip common non-position text
+                skip_patterns = [
+                    r'^\d+$',  # Just numbers
+                    r'^[^\w]*$',  # Just punctuation
+                    r'mã\s*số',
+                    r'họ\s*và\s*tên',
+                    r'chữ\s*in\s*hoa'
+                ]
+                
+                should_skip = False
+                for skip_pattern in skip_patterns:
+                    if re.search(skip_pattern, line, re.IGNORECASE):
+                        should_skip = True
+                        break
+                
+                if not should_skip:
+                    positions.append(line)
+        
+        # If we found multiple positions from table format, format them
+        if len(positions) >= 2:
+            formatted_positions = []
+            for i, pos in enumerate(positions[:5], 1):  # Limit to 5 positions max
+                formatted_positions.append(f"{i}. {pos}")
+            return " ".join(formatted_positions)
+        
+        # Fall back to traditional processing
         content = re.sub(r'\n+', ' ', raw_content)
         content = re.sub(r'\s+', ' ', content)
         content = content.strip()
@@ -414,6 +451,10 @@ class SimpleCVProcessor:
                 result = match.group(1).strip()
                 if len(result) > 5:
                     return self.format_position_list(result)
+        
+        # If we found at least one position from table format, use it
+        if len(positions) >= 1:
+            return positions[0]
         
         # If no structured list found, return cleaned content if reasonable
         if 3 <= len(content) <= 200 and any(c.isalpha() for c in content):
