@@ -112,30 +112,37 @@
             margin-top: 30px;
         }
 
-        .results-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        /* Table styles */
+        #resultsTable tbody td {
+            padding: 6px;
+            border: 1px solid #ddd;
+            font-size: 0.75em;
+            line-height: 1.3;
+            vertical-align: top;
+            word-wrap: break-word;
+            white-space: normal;
         }
-
-        .results-table th {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
+        
+        #resultsTable tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        #resultsTable tbody tr:hover {
+            background-color: #f0f8ff;
+        }
+        
+        .delete-btn {
+            background-color: #ff4757;
             color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7em;
         }
-
-        .results-table td {
-            padding: 15px;
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        .results-table tr:hover {
-            background: #f8f9fa;
+        
+        .delete-btn:hover {
+            background-color: #ff3742;
         }
 
         .export-btn {
@@ -280,26 +287,39 @@
 
             <!-- Results Section -->
             <div class="results-section" id="resultsSection">
-                <h2>📊 Kết quả trích xuất</h2>
+                <h2>🎯 Thông tin được trích xuất</h2>
                 
                 <div style="margin: 20px 0;">
+                    <button id="saveBtn" class="upload-btn" style="margin-right: 10px;">Lưu vào danh sách</button>
                     <button class="export-btn" onclick="exportCSV()">📥 Export CSV</button>
                     <button class="export-btn" onclick="exportJSON()">📄 Export JSON</button>
                     <button class="export-btn" onclick="saveToDatabase()" style="background: linear-gradient(135deg, #6f42c1 0%, #8b5a9f 100%);">💾 Lưu Database</button>
                 </div>
 
-                <table class="results-table" id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th>Trường</th>
-                            <th>Giá trị</th>
-                            <th>Độ tin cậy</th>
-                            <th>Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsBody">
-                    </tbody>
-                </table>
+                <div class="table-wrapper" style="overflow-x:auto; max-height:400px; border:1px solid #ddd; border-radius:8px;">
+                    <table id="resultsTable" style="width:100%;border-collapse:collapse; font-size:0.85em;">
+                        <thead>
+                            <tr style="background:#ff6b6b; color:white; position:sticky; top:0; z-index:10;">
+                                <th style="padding:8px; border:1px solid #ddd; min-width:40px; font-size:0.8em;">STT</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Họ và tên</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:50px; font-size:0.8em;">Title</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:150px; font-size:0.8em;">Mail</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:100px; font-size:0.8em;">Số điện thoại</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:80px; font-size:0.8em;">Ngày sinh</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:60px; font-size:0.8em;">Giới tính</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:80px; font-size:0.8em;">Học vấn</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Trường Đào tạo</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:100px; font-size:0.8em;">Chuyên ngành</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Vị trí hiện tại</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:150px; font-size:0.8em;">Kinh nghiệm công tác</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:120px; font-size:0.8em;">Vị trí ứng tuyển</th>
+                                <th style="padding:8px; border:1px solid #ddd; min-width:60px; font-size:0.8em;">Xóa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Raw Content -->
@@ -351,6 +371,26 @@
             checkApiStatus();
             setupDragAndDrop();
             setupFileInput();
+            
+            // Setup save button
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) {
+                saveBtn.onclick = function() {
+                    if (currentCV) {
+                        cvList.push(currentCV);
+                        localStorage.setItem('cvList', JSON.stringify(cvList));
+                        currentCV = null;
+                        renderTable();
+                        showSuccess('Đã lưu thông tin CV thành công!');
+                    }
+                };
+            }
+            
+            // Load saved data on page load
+            if (cvList.length > 0) {
+                document.getElementById('resultsSection').style.display = 'block';
+                renderTable();
+            }
         });
 
         // Drag and drop
@@ -496,62 +536,84 @@
             };
         }
 
-        // Display results
+        // CV List storage
+        let cvList = JSON.parse(localStorage.getItem('cvList') || '[]');
+        let currentCV = null;
+
+        // Display results in horizontal table format like index.html
         function displayResults(data) {
             currentCVData = data;
-            const tbody = document.getElementById('resultsBody');
-            tbody.innerHTML = '';
-
-            const fieldLabels = {
-                name: 'Họ tên',
-                email: 'Email', 
-                phone: 'Số điện thoại',
-                dob: 'Ngày sinh',
-                gender: 'Giới tính',
-                education: 'Học vấn',
-                school: 'Trường học',
-                major: 'Chuyên ngành',
-                currentPosition: 'Vị trí hiện tại',
-                experience: 'Kinh nghiệm',
-                appliedPosition: 'Vị trí ứng tuyển'
-            };
-
-            Object.entries(data.fields).forEach(([key, value]) => {
-                const confidence = data.confidence[key] || 0;
-                const confidencePercent = Math.round(confidence * 100);
-                const confidenceColor = confidence > 0.8 ? '#28a745' : confidence > 0.6 ? '#ffc107' : '#dc3545';
-
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td><strong>${fieldLabels[key] || key}</strong></td>
-                    <td>
-                        <input type="text" value="${value || ''}" 
-                               onchange="updateField('${key}', this.value)"
-                               style="border: none; background: transparent; width: 100%; padding: 5px;">
-                    </td>
-                    <td>
-                        <span style="color: ${confidenceColor}; font-weight: bold;">
-                            ${confidencePercent}%
-                        </span>
-                    </td>
-                    <td>
-                        <button onclick="verifyField('${key}')" 
-                                style="padding: 5px 10px; border: none; border-radius: 5px; background: #6c757d; color: white; cursor: pointer;">
-                            ✓ Verify
-                        </button>
-                    </td>
-                `;
-            });
-
-            document.getElementById('resultsSection').style.display = 'block';
+            currentCV = extractTableRow(data);
+            renderTable();
             
             if (data.rawContent) {
                 document.getElementById('rawContent').textContent = data.rawContent;
                 document.getElementById('rawContentSection').style.display = 'block';
             }
 
-            // Scroll to results
+            document.getElementById('resultsSection').style.display = 'block';
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function extractTableRow(data) {
+            const fields = data.fields || {};
+            return {
+                name: (fields.name || '').toUpperCase(),
+                title: guessTitle(fields.gender),
+                mail: fields.email || '',
+                phone: fields.phone || '',
+                dob: fields.dob || '',
+                gender: fields.gender || '',
+                education: fields.education || '',
+                school: fields.school || '',
+                major: fields.major || '',
+                currentPosition: fields.currentPosition || '',
+                experience: fields.experience || '',
+                appliedPosition: fields.appliedPosition || ''
+            };
+        }
+
+        function guessTitle(gender) {
+            const genderLower = (gender || '').toLowerCase();
+            if (genderLower.includes('nam') || genderLower.includes('male')) return 'ÔNG';
+            if (genderLower.includes('nữ') || genderLower.includes('female')) return 'BÀ';
+            return '';
+        }
+
+        function renderTable() {
+            const body = document.getElementById('resultsBody');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            let allCVs = [...cvList];
+            if (currentCV) allCVs.push(currentCV);
+            
+            allCVs.forEach((cv, idx) => {
+                body.innerHTML += `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${cv.name}</td>
+                    <td>${cv.title}</td>
+                    <td>${cv.mail}</td>
+                    <td>${cv.phone}</td>
+                    <td>${cv.dob}</td>
+                    <td>${cv.gender}</td>
+                    <td>${cv.education}</td>
+                    <td>${cv.school}</td>
+                    <td>${cv.major}</td>
+                    <td>${cv.currentPosition}</td>
+                    <td>${cv.experience}</td>
+                    <td>${cv.appliedPosition}</td>
+                    <td><button onclick="deleteCV(${idx})" class="delete-btn">Xóa</button></td>
+                </tr>`;
+            });
+        }
+
+        function deleteCV(idx) {
+            if (idx < cvList.length) {
+                cvList.splice(idx, 1);
+                localStorage.setItem('cvList', JSON.stringify(cvList));
+                renderTable();
+            }
         }
 
         // Update field
