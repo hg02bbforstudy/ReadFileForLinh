@@ -322,9 +322,11 @@ class SimpleCVProcessor:
     def extract_applied_position(self, text):
         """Extract applied position from between 'Vị trí ứng tuyển Nơi làm việc' and 'THÔNG TIN BẢN THÂN'"""
         try:
-            # Main extraction: Between markers with table/column format support
+            # Main extraction: Between markers with comprehensive format support
             section_patterns = [
-                # Single line format: "Mã số Vị trí ứng tuyển Nơi làm việc Marketing Tổ chức nhân sự I. THÔNG TIN BẢN THÂN"
+                # Joined text format: "MãsốVịtríứngtuyểnNơilàmviệc...I.THÔNGTINBẢNTHÂN"
+                r'(?:mãsố|masố|ma\s*so)\s*(?:vịtríứngtuyển|vitriungtuyen|vị\s*trí\s*ứng\s*tuyển)\s*(?:nơilàmviệc|noilamviec|nơi\s*làm\s*việc)\s*([\s\S]*?)(?:i\.\s*(?:thôngtinbảnthân|thongtinbanthan|thông\s*tin\s*bản\s*thân)|(?:thôngtinbảnthân|thongtinbanthan|thông\s*tin\s*bản\s*thân)|$)',
+                # Single line format: "Mã số Vị trí ứng tuyển Nơi làm việc ... I. THÔNG TIN BẢN THÂN"
                 r'mã\s*số\s*vị\s*trí\s*ứng\s*tuyển\s*nơi\s*làm\s*việc\s*([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*bản\s*thân|$)',
                 # Table format: "Vị trí ứng tuyển\n\nNơi làm việc\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\nTHÔNG TIN BẢN THÂN"
                 r'vị\s*trí\s*ứng\s*tuyển\s*(?:\n|\r\n?)*\s*nơi\s*làm\s*việc([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
@@ -372,45 +374,85 @@ class SimpleCVProcessor:
             return "", 0.0
     
     def process_applied_position_content(self, raw_content):
-        """Process and clean applied position content - take all data as one string without numbering"""
+        """Process and clean applied position content - take ALL data between markers as one string"""
         if not raw_content:
             return ""
         
-        # Clean basic formatting - convert newlines to spaces
-        content = re.sub(r'\n+', ' ', raw_content)
+        # FIRST: Preserve the raw content completely - don't lose any text between markers
+        logger.info(f"Raw position content: '{raw_content}'")
+        
+        # Convert newlines to spaces but preserve all actual content
+        content = re.sub(r'[\n\r]+', ' ', raw_content)
         content = re.sub(r'\s+', ' ', content)  # Multiple spaces to single space
         content = content.strip()
         
-        # Remove unwanted characters at start/end
-        content = re.sub(r'^[:\-\s\.,;]+|[:\-\s\.,;]+$', '', content)
+        # ONLY remove characters at very start/end, not in middle
+        content = re.sub(r'^[:\-\s\.,;]+', '', content)
+        content = re.sub(r'[:\-\s\.,;]+$', '', content)
         
-        # Filter out common non-position text that might be mixed in
-        skip_words = [
-            'mã số', 'họ và tên', 'chữ in hoa', 'ngày sinh', 'nơi sinh', 
-            'dân tộc', 'quê quán', 'giới tính', 'điện thoại', 'email', 
-            'hộ khẩu', 'nơi ở', 'thông tin người', 'tình trạng hôn nhân', 
-            'sức khỏe', 'chiều cao', 'cân nặng', 'tôn giáo', 'cccd', 
-            'cmnd', 'hộ chiếu', 'ngày cấp', 'nơi cấp'
+        # MINIMAL filtering - only remove obvious non-position elements
+        # Remove standalone numbers (but keep words with numbers like "K1", "P1")
+        content = re.sub(r'\b\d{1,10}\b(?!\w)', ' ', content)
+        
+        # Remove common header/footer words but be very conservative
+        very_specific_skip = [
+            r'\bmã\s*số\b',
+            r'\bhộ\s*khẩu\s*thường\s*trú\b',
+            r'\bnơi\s*ở\s*hiện\s*tại\b',
+            r'\bthông\s*tin\s*người\s*liên\s*hệ\b',
+            r'\btình\s*trạng\s*hôn\s*nhân\b',
+            r'\bsức\s*khỏe\b',
+            r'\bchiều\s*cao\b',
+            r'\bcân\s*nặng\b'
         ]
         
-        # Remove skip words from content
-        for skip_word in skip_words:
-            content = re.sub(skip_word, '', content, flags=re.IGNORECASE)
+        for pattern in very_specific_skip:
+            content = re.sub(pattern, ' ', content, flags=re.IGNORECASE)
         
-        # Remove numbers that appear standalone (like IDs, dates)
-        content = re.sub(r'\b\d+\b', '', content)
-        
-        # Remove extra punctuation and clean up
-        content = re.sub(r'[(){}\[\]]+', '', content)  # Remove brackets
-        content = re.sub(r'[,;:]+', ' ', content)  # Convert punctuation to spaces
-        content = re.sub(r'\s+', ' ', content)  # Multiple spaces to single
+        # Clean up extra spaces
+        content = re.sub(r'\s+', ' ', content)
         content = content.strip()
         
-        # If result is reasonable length and contains letters, return it
-        if 2 <= len(content) <= 200 and re.search(r'[A-Za-zÀ-ỹ]', content):
+        # Handle joined Vietnamese words - separate them
+        content = self.separate_vietnamese_words(content)
+        
+        # If result has reasonable content, return it
+        if len(content) >= 1 and re.search(r'[A-Za-zÀ-ỹ]', content):
+            logger.info(f"Processed position content: '{content}'")
             return content
         
         return ""
+    
+    def separate_vietnamese_words(self, text):
+        """Separate joined Vietnamese words for better readability"""
+        if not text:
+            return text
+            
+        # Common position-related words that might be joined
+        word_mappings = {
+            'marketing': 'Marketing',
+            'Marketing': 'Marketing',
+            'MARKETING': 'Marketing',
+            'tổchứcnhânsự': 'Tổ chức nhân sự',
+            'Tổchứcnhânsự': 'Tổ chức nhân sự', 
+            'TỔCHỨCNHÂNSỰ': 'Tổ chức nhân sự',
+            'tochucnhansu': 'Tổ chức nhân sự',
+            'TOCHUCNHANSU': 'Tổ chức nhân sự',
+            'nhânsự': 'nhân sự',
+            'nhansu': 'nhân sự',
+            'NHANSU': 'nhân sự',
+            'kếtoán': 'kế toán',
+            'ketoan': 'kế toán',
+            'KETOAN': 'kế toán',
+            'kinhdoanh': 'kinh doanh',
+            'KINHDOANH': 'kinh doanh'
+        }
+        
+        result = text
+        for joined, separated in word_mappings.items():
+            result = re.sub(re.escape(joined), separated, result, flags=re.IGNORECASE)
+        
+        return result
     
 
     
