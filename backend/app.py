@@ -25,11 +25,14 @@ class SimpleCVProcessor:
     def __init__(self):
         self.field_patterns = {
             'name': [
-                # Pattern for "PHẠM YẾN LINH" - all caps Vietnamese name
-                r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+)',
+                # Main pattern: extract between "Họ và tên (chữ in hoa)" and "Ngày sinh"
+                r'(?:họ\s*và\s*tên\s*\([^)]*\))([\s\S]*?)(?:ngày\s*sinh)',
+                r'(?:họ\s*và\s*tên)([\s\S]*?)(?:ngày\s*sinh)',
+                r'(?:ho\s*va\s*ten\s*\([^)]*\))([\s\S]*?)(?:ngay\s*sinh)',  # Without diacritics
+                r'(?:ho\s*va\s*ten)([\s\S]*?)(?:ngay\s*sinh)',
+                # Fallback patterns
                 r'(?:họ\s*(?:và\s*)?tên|tên|name)\s*:?\s*([^\n\r]{2,50})',
-                r'PHẠM\s+YẾN\s+LINH',  # Specific pattern for this name
-                r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,})'
+                r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+)'
             ],
             'email': [
                 r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
@@ -121,6 +124,10 @@ class SimpleCVProcessor:
         if field_name == 'appliedPosition':
             return self.extract_applied_position(text)
         
+        # Special handling for name
+        if field_name == 'name':
+            return self.extract_name(text)
+        
         patterns = self.field_patterns.get(field_name, [])
         for pattern in patterns:
             matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -129,6 +136,88 @@ class SimpleCVProcessor:
                 if value and len(value) > 1:
                     return value, 0.8
         return "", 0.0
+    
+    def extract_name(self, text):
+        """Extract name between 'Họ và tên (chữ in hoa)' and 'Ngày sinh'"""
+        try:
+            patterns = [
+                # Pattern 1: Between "Họ và tên (chữ in hoa)" and "Ngày sinh"
+                r'(?:họ\s*và\s*tên\s*\([^)]*\))([\s\S]*?)(?:ngày\s*sinh)',
+                r'(?:họ\s*và\s*tên)([\s\S]*?)(?:ngày\s*sinh)',
+                # Pattern 2: Without diacritics (for cases with encoding issues)
+                r'(?:ho\s*va\s*ten\s*\([^)]*\))([\s\S]*?)(?:ngay\s*sinh)',
+                r'(?:ho\s*va\s*ten)([\s\S]*?)(?:ngay\s*sinh)',
+                # Pattern 3: Mixed case variations
+                r'(?:Ho\s*va\s*ten\s*\([^)]*\))([\s\S]*?)(?:Ngay\s*sinh)',
+                r'(?:HO\s*VA\s*TEN\s*\([^)]*\))([\s\S]*?)(?:NGAY\s*SINH)',
+            ]
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+                for match in matches:
+                    raw_content = match.group(1).strip()
+                    
+                    # Clean the extracted content
+                    cleaned_name = self.clean_extracted_name(raw_content)
+                    if cleaned_name:
+                        return cleaned_name, 0.9
+            
+            # Fallback to general patterns
+            fallback_patterns = [
+                r'(?:họ\s*(?:và\s*)?tên|tên|name)\s*:?\s*([^\n\r]{2,50})',
+                r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]+)'
+            ]
+            
+            for pattern in fallback_patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
+                for match in matches:
+                    value = match.group(1).strip()
+                    cleaned_name = self.clean_extracted_name(value)
+                    if cleaned_name:
+                        return cleaned_name, 0.7
+            
+            return "", 0.0
+            
+        except Exception as e:
+            logger.error(f"Error extracting name: {e}")
+            return "", 0.0
+    
+    def clean_extracted_name(self, raw_text):
+        """Clean and format extracted name text"""
+        if not raw_text:
+            return ""
+        
+        # Remove extra whitespace and newlines
+        cleaned = re.sub(r'\s+', ' ', raw_text).strip()
+        
+        # Remove common unwanted patterns
+        cleaned = re.sub(r'^\W+|\W+$', '', cleaned)  # Remove leading/trailing non-word chars
+        cleaned = re.sub(r'^[:\-\s]+|[:\-\s]+$', '', cleaned)  # Remove colons, dashes at start/end
+        
+        # Look for Vietnamese name patterns (2-4 words, each 2+ chars)
+        name_patterns = [
+            # Pattern for full Vietnamese names (3 words)
+            r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,})',
+            # Pattern for 2-word names
+            r'([A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,}\s+[A-ZÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÉÈẺẼẸÊẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÚÙỦŨỤƯỨỪỬỮỰÝỲỶỸỴĐ]{2,})',
+            # Mixed case pattern
+            r'([A-Za-zÀ-ỹ]{2,}\s+[A-Za-zÀ-ỹ]{2,}\s+[A-Za-zÀ-ỹ]{2,})',
+            r'([A-Za-zÀ-ỹ]{2,}\s+[A-Za-zÀ-ỹ]{2,})'
+        ]
+        
+        for pattern in name_patterns:
+            match = re.search(pattern, cleaned)
+            if match:
+                name = match.group(1).strip()
+                # Validate: name should be 2-50 chars, contain at least one space
+                if 2 <= len(name) <= 50 and ' ' in name:
+                    return name
+        
+        # If no pattern matches but we have reasonable text
+        if 2 <= len(cleaned) <= 50 and any(c.isalpha() for c in cleaned):
+            return cleaned
+        
+        return ""
     
     def extract_applied_position(self, text):
         """Extract applied position to get '1. Marketing 2. Tổ chức nhân sự'"""
