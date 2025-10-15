@@ -372,174 +372,47 @@ class SimpleCVProcessor:
             return "", 0.0
     
     def process_applied_position_content(self, raw_content):
-        """Process and clean applied position content, handle multiple positions and joined text"""
+        """Process and clean applied position content - take all data as one string without numbering"""
         if not raw_content:
             return ""
         
-        # First, extract individual position names from table/column format
-        # Pattern: "\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\n"
-        positions = []
-        
-        # Split by multiple newlines and spaces, filter valid position names
-        # Handle both newline separation and space separation
-        parts = re.split(r'[\n\s]+', raw_content)
-        
-        # Also try splitting by larger chunks for table format
-        lines = re.split(r'\n+', raw_content)
-        all_candidates = parts + lines
-        
-        for candidate in all_candidates:
-            candidate = candidate.strip()
-            # Valid position: 2-50 characters, contains letters, not just punctuation/numbers
-            if 2 <= len(candidate) <= 50 and re.search(r'[A-Za-zÀ-ỹ]', candidate):
-                # Skip common non-position text
-                skip_patterns = [
-                    r'^\d+$',  # Just numbers
-                    r'^[^\w]*$',  # Just punctuation
-                    r'mã\s*số',
-                    r'họ\s*và\s*tên',
-                    r'chữ\s*in\s*hoa',
-                    r'ngày\s*sinh',
-                    r'nơi\s*sinh',
-                    r'dân\s*tộc',
-                    r'quê\s*quán',
-                    r'giới\s*tính',
-                    r'điện\s*thoại',
-                    r'email',
-                    r'hộ\s*khẩu',
-                    r'nơi\s*ở',
-                    r'thông\s*tin\s*người',
-                    r'tình\s*trạng\s*hôn\s*nhân',
-                    r'sức\s*khỏe',
-                    r'chiều\s*cao',
-                    r'cân\s*nặng'
-                ]
-                
-                should_skip = False
-                for skip_pattern in skip_patterns:
-                    if re.search(skip_pattern, candidate, re.IGNORECASE):
-                        should_skip = True
-                        break
-                
-                if not should_skip and candidate not in positions:
-                    positions.append(candidate)
-        
-        # Special handling for space-separated positions like "Marketing Tổ chức nhân sự"
-        if len(positions) == 1 and len(positions[0]) > 10:
-            single_line = positions[0]
-            # Try to split known position combinations
-            if 'marketing' in single_line.lower() and ('tổ chức' in single_line.lower() or 'to chuc' in single_line.lower()):
-                # Split Marketing and Tổ chức nhân sự
-                parts = re.split(r'\s+', single_line)
-                if len(parts) >= 4:  # Marketing + Tổ + chức + nhân + sú
-                    marketing_idx = next((i for i, part in enumerate(parts) if 'marketing' in part.lower()), None)
-                    to_chuc_idx = next((i for i, part in enumerate(parts) if 'tổ' in part.lower() or 'to' in part.lower()), None)
-                    
-                    if marketing_idx is not None and to_chuc_idx is not None and to_chuc_idx > marketing_idx:
-                        marketing = parts[marketing_idx]
-                        to_chuc_nhan_su = ' '.join(parts[to_chuc_idx:to_chuc_idx+3])  # "Tổ chức nhân sự"
-                        return f"1. {marketing} 2. {to_chuc_nhan_su}"
-        
-        # If we found multiple positions from table format, format them
-        if len(positions) >= 2:
-            formatted_positions = []
-            for i, pos in enumerate(positions[:5], 1):  # Limit to 5 positions max
-                formatted_positions.append(f"{i}. {pos}")
-            return " ".join(formatted_positions)
-        
-        # Fall back to traditional processing
+        # Clean basic formatting - convert newlines to spaces
         content = re.sub(r'\n+', ' ', raw_content)
-        content = re.sub(r'\s+', ' ', content)
+        content = re.sub(r'\s+', ' ', content)  # Multiple spaces to single space
         content = content.strip()
         
         # Remove unwanted characters at start/end
         content = re.sub(r'^[:\-\s\.,;]+|[:\-\s\.,;]+$', '', content)
         
-        # Try to separate joined text for common position names
-        content = self.separate_joined_positions(content)
-        
-        # Look for numbered list patterns first (highest priority)
-        numbered_patterns = [
-            # Specific patterns for common cases
-            r'(1\.\s*Marketing\s*2\.\s*Tổ\s*chức\s*nhân\s*sự)',
-            r'(1\.\s*Marketing\s*2\.\s*To\s*chuc\s*nhan\s*su)',
-            # General numbered patterns
-            r'(\d+\.\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\d+\.\s*[A-Za-zÀ-ỹ\s]{2,30})*)',
-            r'(\d+\)\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\d+\)\s*[A-Za-zÀ-ỹ\s]{2,30})*)',
-            # Dash separated
-            r'(\-\s*[A-Za-zÀ-ỹ\s]{2,30}(?:\s*\-\s*[A-Za-zÀ-ỹ\s]{2,30})*)'
+        # Filter out common non-position text that might be mixed in
+        skip_words = [
+            'mã số', 'họ và tên', 'chữ in hoa', 'ngày sinh', 'nơi sinh', 
+            'dân tộc', 'quê quán', 'giới tính', 'điện thoại', 'email', 
+            'hộ khẩu', 'nơi ở', 'thông tin người', 'tình trạng hôn nhân', 
+            'sức khỏe', 'chiều cao', 'cân nặng', 'tôn giáo', 'cccd', 
+            'cmnd', 'hộ chiếu', 'ngày cấp', 'nơi cấp'
         ]
         
-        for pattern in numbered_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                result = match.group(1).strip()
-                if len(result) > 5:
-                    return self.format_position_list(result)
+        # Remove skip words from content
+        for skip_word in skip_words:
+            content = re.sub(skip_word, '', content, flags=re.IGNORECASE)
         
-        # Look for comma-separated positions
-        comma_patterns = [
-            r'([A-Za-zÀ-ỹ\s]{2,20}(?:\s*,\s*[A-Za-zÀ-ỹ\s]{2,20})+)',
-            r'([A-Za-zÀ-ỹ\s]{2,30}(?:\s+và\s+[A-Za-zÀ-ỹ\s]{2,30})+)'
-        ]
+        # Remove numbers that appear standalone (like IDs, dates)
+        content = re.sub(r'\b\d+\b', '', content)
         
-        for pattern in comma_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                result = match.group(1).strip()
-                if len(result) > 5:
-                    return self.format_position_list(result)
+        # Remove extra punctuation and clean up
+        content = re.sub(r'[(){}\[\]]+', '', content)  # Remove brackets
+        content = re.sub(r'[,;:]+', ' ', content)  # Convert punctuation to spaces
+        content = re.sub(r'\s+', ' ', content)  # Multiple spaces to single
+        content = content.strip()
         
-        # If we found at least one position from table format, use it
-        if len(positions) >= 1:
-            return positions[0]
-        
-        # If no structured list found, return cleaned content if reasonable
-        if 3 <= len(content) <= 200 and any(c.isalpha() for c in content):
+        # If result is reasonable length and contains letters, return it
+        if 2 <= len(content) <= 200 and re.search(r'[A-Za-zÀ-ỹ]', content):
             return content
         
         return ""
     
-    def separate_joined_positions(self, text):
-        """Separate joined position names"""
-        # Common position name mappings
-        position_mappings = {
-            'MARKETING': 'Marketing',
-            'marketing': 'Marketing',  
-            'TOCHUCNHANSU': 'Tổ chức nhân sự',
-            'tochucnhansu': 'Tổ chức nhân sự',
-            'NHANSU': 'Nhân sự',
-            'nhansu': 'Nhân sự',
-            'KETOAN': 'Kế toán',
-            'ketoan': 'Kế toán',
-            'KIEMTOAN': 'Kiểm toán', 
-            'kiemtoan': 'Kiểm toán',
-            'SALE': 'Sale',
-            'KINH DOANH': 'Kinh doanh',
-            'kinhdoanh': 'Kinh doanh'
-        }
-        
-        result = text
-        for joined, separated in position_mappings.items():
-            result = re.sub(joined, separated, result, flags=re.IGNORECASE)
-        
-        # Try to separate patterns like "1.Marketing2.Tổchứcnhânsự"
-        result = re.sub(r'(\d+)\.(Marketing)(\d+)\.(Tổchứcnhânsự|Tochucnhansu)', 
-                       r'\1. \2 \3. Tổ chức nhân sự', result, flags=re.IGNORECASE)
-        
-        return result
-    
-    def format_position_list(self, text):
-        """Format the position list for consistent output"""
-        if not text:
-            return ""
-        
-        # Clean up spacing around numbers and punctuation
-        formatted = re.sub(r'(\d+)\s*[\.\)]\s*', r'\1. ', text)
-        formatted = re.sub(r'\s*,\s*', ', ', formatted)
-        formatted = re.sub(r'\s+', ' ', formatted)
-        
-        return formatted.strip()
+
     
     def process_cv(self, file_path, file_type):
         try:
