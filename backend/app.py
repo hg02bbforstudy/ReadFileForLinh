@@ -324,18 +324,20 @@ class SimpleCVProcessor:
         try:
             # Main extraction: Between markers with table/column format support
             section_patterns = [
+                # Single line format: "Mã số Vị trí ứng tuyển Nơi làm việc Marketing Tổ chức nhân sự I. THÔNG TIN BẢN THÂN"
+                r'mã\s*số\s*vị\s*trí\s*ứng\s*tuyển\s*nơi\s*làm\s*việc\s*([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*bản\s*thân|$)',
                 # Table format: "Vị trí ứng tuyển\n\nNơi làm việc\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\nTHÔNG TIN BẢN THÂN"
-                r'vị\s*trí\s*ứng\s*tuyển\s*(?:\n|\r\n?)*\s*nơi\s*làm\s*việc([\s\S]*?)(?:thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
+                r'vị\s*trí\s*ứng\s*tuyển\s*(?:\n|\r\n?)*\s*nơi\s*làm\s*việc([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
                 # Standard format with various spacing
-                r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
+                r'vị\s*trí\s*ứng\s*tuyển[\s\S]*?nơi\s*làm\s*việc([\s\S]*?)(?:i\.\s*thông\s*tin\s*bản\s*thân|thông\s*tin\s*bản\s*thân|i\.\s*thông\s*tin|$)',
                 # Without diacritics (encoding issues)
-                r'vi\s*tri\s*ung\s*tuyen[\s\S]*?noi\s*lam\s*viec([\s\S]*?)(?:thong\s*tin\s*ban\s*than|i\.\s*thong\s*tin|$)',
+                r'vi\s*tri\s*ung\s*tuyen[\s\S]*?noi\s*lam\s*viec([\s\S]*?)(?:i\.\s*thong\s*tin\s*ban\s*than|thong\s*tin\s*ban\s*than|i\.\s*thong\s*tin|$)',
                 # Mixed case variations
-                r'Vi\s*tri\s*ung\s*tuyen[\s\S]*?Noi\s*lam\s*viec([\s\S]*?)(?:Thong\s*tin\s*ban\s*than|I\.\s*THONG\s*TIN|$)',
-                r'VI\s*TRI\s*UNG\s*TUYEN[\s\S]*?NOI\s*LAM\s*VIEC([\s\S]*?)(?:THONG\s*TIN\s*BAN\s*THAN|I\.\s*THONG\s*TIN|$)',
+                r'Vi\s*tri\s*ung\s*tuyen[\s\S]*?Noi\s*lam\s*viec([\s\S]*?)(?:I\.\s*Thong\s*tin\s*ban\s*than|Thong\s*tin\s*ban\s*than|I\.\s*THONG\s*TIN|$)',
+                r'VI\s*TRI\s*UNG\s*TUYEN[\s\S]*?NOI\s*LAM\s*VIEC([\s\S]*?)(?:I\.\s*THONG\s*TIN\s*BAN\s*THAN|THONG\s*TIN\s*BAN\s*THAN|I\.\s*THONG\s*TIN|$)',
                 # Joined text variations  
-                r'vitriungtuyennoi?lamviec([\s\S]*?)(?:thongtinbanthan|$)',
-                r'VITRIUNGTUYENNOI?LAMVIEC([\s\S]*?)(?:THONGTINBANTHAN|$)'
+                r'vitriungtuyennoi?lamviec([\s\S]*?)(?:i?thongtinbanthan|$)',
+                r'VITRIUNGTUYENNOI?LAMVIEC([\s\S]*?)(?:I?THONGTINBANTHAN|$)'
             ]
             
             for pattern in section_patterns:
@@ -378,29 +380,65 @@ class SimpleCVProcessor:
         # Pattern: "\n\n\n\nMarketing\n\n\n\nTổ chức nhân sự\n\n\n\n"
         positions = []
         
-        # Split by multiple newlines and filter valid position names
+        # Split by multiple newlines and spaces, filter valid position names
+        # Handle both newline separation and space separation
+        parts = re.split(r'[\n\s]+', raw_content)
+        
+        # Also try splitting by larger chunks for table format
         lines = re.split(r'\n+', raw_content)
-        for line in lines:
-            line = line.strip()
+        all_candidates = parts + lines
+        
+        for candidate in all_candidates:
+            candidate = candidate.strip()
             # Valid position: 2-50 characters, contains letters, not just punctuation/numbers
-            if 2 <= len(line) <= 50 and re.search(r'[A-Za-zÀ-ỹ]', line):
+            if 2 <= len(candidate) <= 50 and re.search(r'[A-Za-zÀ-ỹ]', candidate):
                 # Skip common non-position text
                 skip_patterns = [
                     r'^\d+$',  # Just numbers
                     r'^[^\w]*$',  # Just punctuation
                     r'mã\s*số',
                     r'họ\s*và\s*tên',
-                    r'chữ\s*in\s*hoa'
+                    r'chữ\s*in\s*hoa',
+                    r'ngày\s*sinh',
+                    r'nơi\s*sinh',
+                    r'dân\s*tộc',
+                    r'quê\s*quán',
+                    r'giới\s*tính',
+                    r'điện\s*thoại',
+                    r'email',
+                    r'hộ\s*khẩu',
+                    r'nơi\s*ở',
+                    r'thông\s*tin\s*người',
+                    r'tình\s*trạng\s*hôn\s*nhân',
+                    r'sức\s*khỏe',
+                    r'chiều\s*cao',
+                    r'cân\s*nặng'
                 ]
                 
                 should_skip = False
                 for skip_pattern in skip_patterns:
-                    if re.search(skip_pattern, line, re.IGNORECASE):
+                    if re.search(skip_pattern, candidate, re.IGNORECASE):
                         should_skip = True
                         break
                 
-                if not should_skip:
-                    positions.append(line)
+                if not should_skip and candidate not in positions:
+                    positions.append(candidate)
+        
+        # Special handling for space-separated positions like "Marketing Tổ chức nhân sự"
+        if len(positions) == 1 and len(positions[0]) > 10:
+            single_line = positions[0]
+            # Try to split known position combinations
+            if 'marketing' in single_line.lower() and ('tổ chức' in single_line.lower() or 'to chuc' in single_line.lower()):
+                # Split Marketing and Tổ chức nhân sự
+                parts = re.split(r'\s+', single_line)
+                if len(parts) >= 4:  # Marketing + Tổ + chức + nhân + sú
+                    marketing_idx = next((i for i, part in enumerate(parts) if 'marketing' in part.lower()), None)
+                    to_chuc_idx = next((i for i, part in enumerate(parts) if 'tổ' in part.lower() or 'to' in part.lower()), None)
+                    
+                    if marketing_idx is not None and to_chuc_idx is not None and to_chuc_idx > marketing_idx:
+                        marketing = parts[marketing_idx]
+                        to_chuc_nhan_su = ' '.join(parts[to_chuc_idx:to_chuc_idx+3])  # "Tổ chức nhân sự"
+                        return f"1. {marketing} 2. {to_chuc_nhan_su}"
         
         # If we found multiple positions from table format, format them
         if len(positions) >= 2:
